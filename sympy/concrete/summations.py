@@ -169,7 +169,8 @@ class Sum(Expr):
         m = int(m)
         n = int(n)
         f = self.function
-        assert len(self.limits) == 1
+        if not len(self.limits) == 1:
+            raise NotImplementedError("Euler-Maclaurin series for more than one variables not implemented.")
         i, a, b = self.limits[0]
         s = S.Zero
         if m:
