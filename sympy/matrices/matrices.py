@@ -1948,6 +1948,19 @@ class Matrix(object):
             assert sum(res) == algebraical
             return res
 
+    def _diagonal_power(self, n):
+        return Matrix(self.rows, self.cols, lambda i, j: self[i,j]**n if i==j else 0)
+
+    def SVD(self):
+        A = self
+        VEM, VEV = (A.T * A).diagonalize() # V is VEM
+        UEM, UEV = (A * A.T).diagonalize() # U is UEM
+        assert VEV == UEV
+        sigma = VEV._diagonal_power(S(1)/2)
+        return UEM, sigma, VEM
+        
+        
+
 def matrix_multiply(A, B):
     """
     Matrix product A*B.
