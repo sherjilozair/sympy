@@ -1734,8 +1734,8 @@ class Matrix(object):
                         return
         recurse_sub_blocks(self)
         return sub_blocks
-
-    def ortho_diagonalize(self, reals_only = False):
+            
+    def diagonalize(self, reals_only=False, normalvects=False):
         """
         Return diagonalized matrix D and transformation P such as
 
@@ -1782,7 +1782,10 @@ class Matrix(object):
             for eigenval, multiplicity, vects in a:
                 for k in range(multiplicity):
                     diagvals.append(eigenval)
-                    vec = _normalized(vects[k])
+                    if normalvects:
+                        vec = _normalized(vects[k])
+                    else:
+                        vec = vects[k]
                     P = P.col_insert(P.cols, vec)
             D = diag(*diagvals)
             self._diagonalize_clear_subproducts()
@@ -1955,10 +1958,8 @@ class Matrix(object):
         return Matrix(self.rows, self.cols, lambda i, j: self[i,j]**n if i==j else 0)
 
     def SVD(A):
-        ATA = A.T * A
-        AAT = A * A.T
-        UEM, UEV = AAT.ortho_diagonalize()
-        VEM, VEV = ATA.ortho_diagonalize()
+        UEM, UEV = (A.T * A).diagonalize(normalvects=True)
+        VEM, VEV = (A * A.T).diagonalize(normalvects=True)
         sigma = UEV._diagonal_power(S(1)/2)[0:A.rows,0:A.cols]
         return UEM, sigma, VEM
         
