@@ -1494,15 +1494,15 @@ def test_normalvects_sorted_diogonalization():
 
 def test_SVD():
     M = Matrix(((1,0,0,0,2),(0,0,3,0,0),(0,0,0,0,0),(0,4,0,0,0)))
-    U, S, V = M.SVD()
-    assert U * S * V.T == M
+    U, Sig, V = M.SVD()
+    assert U * Sig * V.T == M
     assert U*U.T == U.T*U == eye(U.cols)
     assert V*V.T == V.T*V == eye(V.cols)
     #assert S.is_diagonal()
     
-    N = Matrix(((0,1),(1,0),(1,1)))
-    U, S, V = M.SVD()
-    assert U * S * V.T == M
+    M = Matrix(((0,1),(1,0),(1,1)))
+    U, Sig, V = M.SVD()
+    assert U * Sig * V.T == M
     assert U*U.T == U.T*U == eye(U.cols)
     assert V*V.T == V.T*V == eye(V.cols)
     #assert S.is_diagonal()

@@ -1,4 +1,4 @@
-from sympy import Basic, Symbol, Integer, S, Dummy
+from sympy import Basic, Symbol, Integer, S, Dummy, Add
 from sympy.core.sympify import sympify, converter, SympifyError
 
 from sympy.polys import Poly, roots, cancel
@@ -1816,7 +1816,7 @@ class Matrix(object):
             if self._eigenvects == None:
                 self._eigenvects = self.eigenvects()
             if sortedvals:
-                self._eigenvects.sort(lambda i, j : int(j[0]-i[0]))
+                self._eigenvects.sort(reverse=True)
             diagvals = []
             P = Matrix(self.rows, 0, [])
             for eigenval, multiplicity, vects in self._eigenvects:
@@ -2015,12 +2015,21 @@ class Matrix(object):
         return Matrix(self.rows, self.cols, lambda i, j: self[i,j]**n if i==j else 0)
 
     def SVD(A):
-        UEM, UEV = (A.T * A).diagonalize(normalvects=True, sortedvals=True)
-        VEM, VEV = (A * A.T).diagonalize(normalvects=True, sortedvals=True)
-        sigma = UEV._diagonal_power(S(1)/2)[0:A.rows,0:A.cols]
-        if A.rows<A.cols:
-            return VEM, sigma, UEM
-        return UEM, sigma, VEM
+        """
+        Returns the Singular Value Decomposition (U, Sig, V) of a general Matrix of shape (m,n).
+        U is the orthonormal rowspace basis, of shape (m,m)
+        Sig is the Matrix of shape(m,n) having eigenvalues of A in the diagonal.
+        V is the orthonormal columnspace basis, of shape(n,n)
+        such that U * Sig * V.T == A
+        
+        """
+        U, UEV = (A * A.T).diagonalize(normalvects=True, sortedvals=True)
+        V, VEV = (A.T * A).diagonalize(normalvects=True, sortedvals=True)
+        if A.rows > A.cols:
+            Sig = UEV._diagonal_power(S(1)/2)[0:A.rows,0:A.cols]
+            return U, Sig, V
+        Sig = VEV._diagonal_power(S(1)/2)[0:A.rows,0:A.cols]
+        return U, Sig, V
 
 def matrix_multiply(A, B):
     """
@@ -2790,4 +2799,4 @@ def symarray(prefix, shape):
     return arr
 
 def _normalized(vec):
-    return vec/sqrt(sum(i**2 for i in vec.mat))
+    return vec/sqrt(Add(*(i**2 for i in vec.mat)))
