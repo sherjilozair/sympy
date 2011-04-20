@@ -4,6 +4,7 @@ from sympy.core.symbol import Symbol, Dummy
 from sympy.core.numbers import Integer
 from sympy.core.singleton import S
 from sympy.core.sympify import sympify, converter, SympifyError
+from sympy.functions.elementary.miscellaneous import sqrt
 
 from sympy.polys import Poly, roots, cancel
 from sympy.simplify import simplify
@@ -1734,7 +1735,7 @@ class Matrix(object):
         recurse_sub_blocks(self)
         return sub_blocks
 
-    def diagonalize(self, reals_only = False):
+    def ortho_diagonalize(self, reals_only = False):
         """
         Return diagonalized matrix D and transformation P such as
 
@@ -1774,17 +1775,19 @@ class Matrix(object):
         else:
             if self._eigenvects == None:
                 self._eigenvects = self.eigenvects()
+            a = self._eigenvects
+            a.sort(lambda i,j : int(j[0]-i[0]))
             diagvals = []
             P = Matrix(self.rows, 0, [])
-            for eigenval, multiplicity, vects in self._eigenvects:
+            for eigenval, multiplicity, vects in a:
                 for k in range(multiplicity):
                     diagvals.append(eigenval)
-                    vec = vects[k]
+                    vec = _normalized(vects[k])
                     P = P.col_insert(P.cols, vec)
             D = diag(*diagvals)
             self._diagonalize_clear_subproducts()
             return (P, D)
-
+    
     def is_diagonalizable(self, reals_only = False, clear_subproducts=True):
         """
         Check if matrix is diagonalizable.
@@ -1951,15 +1954,16 @@ class Matrix(object):
     def _diagonal_power(self, n):
         return Matrix(self.rows, self.cols, lambda i, j: self[i,j]**n if i==j else 0)
 
-    def SVD(self):
-        A = self
-        VEM, VEV = (A.T * A).diagonalize() # V is VEM
-        UEM, UEV = (A * A.T).diagonalize() # U is UEM
-        #assert VEV == UEV
-        sigma = UEV._diagonal_power(S(1)/2)
+    def SVD(A):
+        ATA = A.T * A
+        AAT = A * A.T
+        UEM, UEV = AAT.ortho_diagonalize()
+        VEM, VEV = ATA.ortho_diagonalize()
+        sigma = UEV._diagonal_power(S(1)/2)[0:A.rows,0:A.cols]
         return UEM, sigma, VEM
         
-        
+def _normalized(vec):
+    return vec/sqrt(sum(i**2 for i in vec.mat)) 
 
 def matrix_multiply(A, B):
     """
