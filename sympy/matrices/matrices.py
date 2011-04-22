@@ -1090,8 +1090,8 @@ class Matrix(object):
             # normalize it
             R[j,j] = tmp.norm()
             Q[:,j] = tmp / R[j,j]
-            if Q[:,j].norm() != 1:
-                raise NotImplementedError("Could not normalize the vector %d." % j)
+            if Q[:,j].norm().simplify() != 1:
+                raise NotImplementedError("Could not normalize the vector %s." % Q[:,j])
             for i in range(j):
                 R[i,j] = Q[:,i].dot(self[:,j])
         return Q,R
@@ -1128,6 +1128,25 @@ class Matrix(object):
                 tmp -= R[j,k] * x[n-1-k]
             x.append(tmp/R[j,j])
         return Matrix([row.mat for row in reversed(x)])
+
+    def QR_HH_decomposition(self):
+        Ap = self
+        Q = eye(self.rows)
+        for i in xrange(min(self.rows-1, self.cols)):
+            x = Ap[:, 0]
+            e = Matrix(x.rows, x.cols, lambda i, j: 1 if i == j else 0)
+            alpha = x.norm().evalf()
+            u = x - e * alpha
+            v = (u / u.norm()).evalf()
+            Qp = eye(v.rows) - 2 * v * v.T
+            q = diag(eye(self.rows - v.rows), Qp.evalf())
+            Q = Q * q.T
+            Ap = (Qp * Ap)[1:, 1:]
+        R = (Q.T * self)
+        return Q.evalf(), R
+
+    QR = QR_HH_decomposition
+            
 
     # Utility functions
     def simplify(self, simplify=sympy_simplify):
