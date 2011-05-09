@@ -263,6 +263,7 @@ def test_issue835():
 def test_newissue():
     assert limit(exp(1/sin(x))/exp(cot(x)), x, 0) == 1
 
+<<<<<<< HEAD
 def test_extended_real_line():
     assert limit(x - oo, x, oo) == -oo
     assert limit(oo - x, x, -oo) == oo
@@ -282,3 +283,10 @@ def test_order_oo():
 def test_issue2337():
     raises(NotImplementedError, 'limit(exp(x*y), x, oo)')
     raises(NotImplementedError, 'limit(exp(-x*y), x, oo)')
+
+def test_issue2293():
+    x = Symbol('x')
+    raises(ValueError, 'limit(x**2, 0, 0)')
+    raises(ValueError, 'limit(x**2 + x + 1, Rational(2, 3), 2)')
+    raises(ValueError, 'limit(x**2 + x + 1, Integer(4), 10)')
+
