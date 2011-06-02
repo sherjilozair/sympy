@@ -222,7 +222,7 @@ def _sympify(a):
        True
 
        >>> Integer(1) == '1'
-       False
+       False`
 
        >>> from sympy import Symbol
        >>> from sympy.abc import x

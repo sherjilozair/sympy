@@ -301,10 +301,14 @@ class Float(Number):
             else:
                 _mpf_ = mpmath.mpf(
                     S.NegativeOne ** num[0] * num[1] * 2 ** num[2])._mpf_
+        #elif Integer(num) == num:
+        #    return Integer(num)
         else:
             _mpf_ = mpmath.mpf(num)._mpf_
         if not num:
             return C.Zero()
+        if _mpf_[2] >= 0:
+            return Integer(num)
         obj = Expr.__new__(cls)
         obj._mpf_ = _mpf_
         obj._prec = prec

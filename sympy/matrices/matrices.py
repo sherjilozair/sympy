@@ -1,4 +1,4 @@
-from sympy import Basic, Symbol, Integer, C, S, Dummy, Rational
+from sympy import Basic, Symbol, Integer, C, S, Dummy, Rational, Add
 from sympy.core.sympify import sympify, converter, SympifyError
 
 from sympy.polys import Poly, roots, cancel
@@ -502,6 +502,166 @@ class Matrix(object):
     def __repr__(self):
         return sstr(self)
 
+    def cholesky(self):
+        """
+        Returns the Cholesky Decomposition L of a Matrix A such that L * L.T = A
+
+        A must be a square, symmetric, positive-definite and non-singular matrix
+
+        >>> from sympy.matrices import Matrix
+        >>> A = Matrix(((25,15,-5),(15,18,0),(-5,0,11)))
+        >>> A.cholesky()
+        [ 5, 0, 0]
+        [ 3, 3, 0]
+        [-1, 1, 3]
+        >>> A.cholesky() * A.cholesky().T
+        [25, 15, -5]
+        [15, 18,  0]
+        [-5,  0, 11]
+        """
+
+        if not self.is_square:
+            raise NonSquareMatrixError("Matrix must be square to perform the Cholesky Decomposition.")
+        if not self.is_symmetric():
+            raise ValueError("Matrix must be symmetric to perform the Cholesky Decomposition")
+        return self._cholesky()
+
+    def _cholesky(self):
+        """ Helper function of cholesky, without the error checks, to be used privately. """
+
+        L = zeros((self.rows, self.rows))
+        for i in xrange(self.rows):
+            for j in xrange(i):
+                L[i, j] = (1 / L[j, j]) * (self[i, j] - sum(L[i, k] * L[j, k] for k in range(j)))
+            L[i, i] = (self[i, i] - sum(L[i, k] ** 2 for k in range(i))) ** S(1)/2
+        return L
+
+    def LDLdecomposition(self):
+        """
+        Returns the LDL Decomposition (L,D) of matrix A, such that L * D * L.T == A
+        This method eliminates the use of square root. Further this ensures that all the diagonal entries of L are 1.
+        A must be a square, symmetric, positive-definite and non-singular matrix.
+
+        >>> from sympy.matrices import *
+        >>> A = Matrix(((25,15,-5),(15,18,0),(-5,0,11)))
+        >>> L, D = A.LDLdecomposition()
+        >>> L
+        [   1,   0, 0]
+        [ 3/5,   1, 0]
+        [-1/5, 1/3, 1]
+        >>> D
+        [25, 0, 0]
+        [ 0, 9, 0]
+        [ 0, 0, 9]
+        >>> L * D * L.T * A.inv() == eye(A.rows)
+        True
+
+        """
+        if not self.is_square:
+            raise NonSquareMatrixException("Matrix must be square to perform the LDL Decomposition.")
+        if not self.is_symmetric():
+            raise ValueError("Matrix must be symmetric to perform the LDL Decomposition.")
+        return self._LDLdecomposition()
+
+    def _LDLdecomposition(self):
+        """ Helper function of LDLdecomposition, without the error checks, to be used privately. """
+        D = zeros((self.rows, self.rows))
+        L = eye(self.rows)
+        for i in xrange(self.rows):
+            for j in xrange(i):
+                L[i, j] = (1 / D[j, j]) * (self[i, j] - sum(L[i, k] * L[j, k] * D[k, k] for k in range(j)))
+            D[i, i] = self[i, i] - sum(L[i, k]**2 * D[k, k] for k in range(i))
+        return L, D
+
+    def lower_triangular_solve(self, rhs):
+        """
+        Solves Ax = B, where A is a lower triangular matrix, with non-zero diagonal entries.
+
+        """
+
+        if not self.is_square:
+            raise NonSquareMatrixException("Matrix must be square to perform lower triangular solve.")
+        if rhs.rows != self.rows:
+            raise TypeError("Matrices size mismatch")
+        if not self.is_lower():
+            raise TypeError("Matrix is not lower triangular")
+        return self._lower_triangular_solve(rhs)
+
+    def _lower_triangular_solve(self, rhs):
+        """ Helper function of function lower_triangular_solve, without the error checks, to be used privately. """
+        X = zeros((self.rows, 1))
+        for i in xrange(self.rows):
+            X[i, 0] = (rhs[i, 0] - sum(self[i, k] * X[k, 0] for k in xrange(i))) / self[i, i]
+        return X
+
+    def upper_triangular_solve(self, rhs):
+        """
+        Solves Ax = B, where A is an upper triangular matrix.
+
+        """
+        if not self.is_square:
+            raise NonSquareMatrixException("Matrix must be square to perform upper triangular solve.")
+        if rhs.rows != self.rows:
+            raise TypeError("Matrix size mismatch")
+        if not self.is_upper():
+            raise TypeError("Matrix is not upper triangular")
+        return self._upper_triangular_solve(rhs)
+
+    def _upper_triangular_solve(self, rhs):
+        """ Helper function of function upper_triangular_solve, without the error checks, to be used privately. """
+        X = zeros((self.rows, 1))
+        for i in reversed(xrange(self.rows)):
+            X[i, 0] = (rhs[i, 0] - sum(self[i, k] * X[k, 0] for k in range(i+1, self.rows))) / self[i, i]
+        return X
+
+    def cholesky_solve(self, rhs):
+        """
+        Solves Ax = B using Cholesky decomposition, for a general square non-singular matrix.
+        For a non-square matrix with rows > cols, the least squares solution is returned.
+
+        """
+        if self.is_symmetric():
+            L = self._cholesky()
+        elif self.rows >= self.cols:
+            L = (self.T * self)._cholesky()
+            rhs = self.T * rhs
+        else:
+            raise NotImplementedError("Support for infinite number of solutions not implemented.")
+        Y = L._lower_triangular_solve(rhs)
+        return (L.T)._upper_triangular_solve(Y)
+
+    def diagonal_solve(self, rhs):
+        """
+        Solves Ax = B efficiently, where A is a diagonal Matrix, with non-zero diagonal entries.
+        """
+        if not self.is_diagonal:
+            raise TypeError("Matrix should be diagonal")
+        if rhs.rows != self.rows:
+            raise TypeError("Size mis-match")
+        return self._diagonal_solve(rhs)
+
+    def _diagonal_solve(self, rhs):
+        """ Helper function of function diagonal_solve, without the error checks, to be used privately. """
+        return Matrix(rhs.rows, 1, lambda i, j: rhs[i, 0] / self[i, i])
+
+    def LDLsolve(self, rhs):
+        """
+        Solves Ax = B using LDL decomposition, for a general square and non-singular matrix.
+        For a non-square matrix with rows > cols, the least squares solution is returned.
+
+        """
+        if self.is_symmetric():
+            L, D = self.LDLdecomposition()
+        elif self.rows >= self.cols:
+            L, D = (self.T * self).LDLdecomposition()
+            rhs = self.T * rhs
+        else:
+            raise NotImplementedError("Support for infinite number of solutions not implemented.")
+        Y = L._lower_triangular_solve(rhs)
+        Z = D._diagonal_solve(Y)
+        return (L.T)._upper_triangular_solve(Z)
+
+
     def inv(self, method="GE", iszerofunc=_iszero, try_block_diag=False):
         """
         Calculates the matrix inverse.
@@ -852,7 +1012,7 @@ class Matrix(object):
             print "Invalid reshape parameters %d %d" % (_rows, _cols)
         return Matrix(_rows, _cols, lambda i,j: self.mat[i*_cols + j])
 
-    def print_nonzero (self, symb="X"):
+    def nonzero (self, symb="X"):
         """
         Shows location of non-zero entries for fast shape lookup ::
 
@@ -881,7 +1041,7 @@ class Matrix(object):
                 else:
                     s += symb + ""
             s += "]\n"
-        print s
+        return s
 
     def LUsolve(self, rhs, iszerofunc=_iszero):
         """
@@ -2397,15 +2557,7 @@ def jordan_cell(eigenval, n):
         out[i, i] = eigenval
         out[i, i+1] = S.One
     out[n-1, n-1] = eigenval
-    return out
-
-def randMatrix(r,c,min=0,max=99,seed=[]):
-    """Create random matrix r x c"""
-    if seed == []:
-        prng = random.Random()  # use system time
-    else:
-        prng = random.Random(seed)
-    return Matrix(r,c,lambda i,j: prng.randint(min,max))
+    return outf
 
 def hessian(f, varlist):
     """Compute Hessian matrix for a function f
@@ -2520,350 +2672,6 @@ def _matrix_sympify(matrix):
     raise SympifyError('Matrix cannot be sympified')
 converter[Matrix] = _matrix_sympify
 del _matrix_sympify
-
-
-class SparseMatrix(Matrix):
-    """Sparse matrix"""
-
-    def __init__(self, *args):
-        if len(args) == 3 and callable(args[2]):
-            op = args[2]
-            if not isinstance(args[0], (int, Integer)) or not isinstance(args[1], (int, Integer)):
-                raise TypeError("`args[0]` and `args[1]` must both be integers.")
-            self.rows = args[0]
-            self.cols = args[1]
-            self.mat = {}
-            for i in range(self.rows):
-                for j in range(self.cols):
-                    value = sympify(op(i,j))
-                    if value != 0:
-                        self.mat[(i,j)] = value
-        elif len(args)==3 and isinstance(args[0],int) and \
-                isinstance(args[1],int) and isinstance(args[2], (list, tuple)):
-            self.rows = args[0]
-            self.cols = args[1]
-            mat = args[2]
-            self.mat = {}
-            for i in range(self.rows):
-                for j in range(self.cols):
-                    value = sympify(mat[i*self.cols+j])
-                    if value != 0:
-                        self.mat[(i,j)] = value
-        elif len(args)==3 and isinstance(args[0],int) and \
-                isinstance(args[1],int) and isinstance(args[2], dict):
-            self.rows = args[0]
-            self.cols = args[1]
-            self.mat = {}
-            # manual copy, copy.deepcopy() doesn't work
-            for key in args[2].keys():
-                self.mat[key] = args[2][key]
-        else:
-            if len(args) == 1:
-                mat = args[0]
-            else:
-                mat = args
-            if not isinstance(mat[0], (list, tuple)):
-                mat = [ [element] for element in mat ]
-            self.rows = len(mat)
-            self.cols = len(mat[0])
-            self.mat = {}
-            for i in range(self.rows):
-                if len(mat[i]) != self.cols:
-                    raise ValueError("All arguments must have the same length.")
-                for j in range(self.cols):
-                    value = sympify(mat[i][j])
-                    if value != 0:
-                        self.mat[(i,j)] = value
-
-    def __getitem__(self, key):
-        if isinstance(key, slice) or isinstance(key, int):
-            lo, hi = self.slice2bounds(key, len(self))
-            L = []
-            for i in range(lo, hi):
-                m,n = self.rowdecomp(i)
-                if (m,n) in self.mat:
-                    L.append(self.mat[(m,n)])
-                else:
-                    L.append(0)
-            if len(L) == 1:
-                return L[0]
-            else:
-                return L
-        if len(key) != 2:
-            raise ValueError("`key` must be of length 2.")
-
-        if isinstance(key[0], int) and isinstance(key[1], int):
-            i,j=self.key2ij(key)
-            if (i, j) in self.mat:
-                return self.mat[(i,j)]
-            else:
-                return 0
-        elif isinstance(key[0], slice) or isinstance(key[1], slice):
-            return self.submatrix(key)
-        else:
-            raise IndexError("Index out of range: a[%s]"%repr(key))
-
-    def rowdecomp(self, num):
-        nmax = len(self)
-        if not (0 <= num < nmax) or not (0 <= -num < nmax):
-            raise ValueError("`num` must satisfy 0 <= `num` < `self.rows*" +
-                "*self.cols` (%d) and 0 <= -num < " % nmax +
-                "`self.rows*self.cols` (%d) to apply redecomp()." % nmax)
-        i, j = 0, num
-        while j >= self.cols:
-            j -= self.cols
-            i += 1
-        return i,j
-
-    def __setitem__(self, key, value):
-        # almost identical, need to test for 0
-        if len(key) != 2:
-            raise ValueError("`key` must be of length 2.")
-
-        if isinstance(key[0], slice) or isinstance(key[1], slice):
-            if isinstance(value, Matrix):
-                self.copyin_matrix(key, value)
-            if isinstance(value, (list, tuple)):
-                self.copyin_list(key, value)
-        else:
-            i,j=self.key2ij(key)
-            testval = sympify(value)
-            if testval != 0:
-                self.mat[(i,j)] = testval
-            if (i,j) in self.mat:
-                del self.mat[(i,j)]
-
-    def row_del(self, k):
-        newD = {}
-        for (i,j) in self.mat.keys():
-            if i==k:
-                pass
-            elif i > k:
-                newD[i-1,j] = self.mat[i,j]
-            else:
-                newD[i,j] = self.mat[i,j]
-        self.mat = newD
-        self.rows -= 1
-
-    def col_del(self, k):
-        newD = {}
-        for (i,j) in self.mat.keys():
-            if j==k:
-                pass
-            elif j > k:
-                newD[i,j-1] = self.mat[i,j]
-            else:
-                newD[i,j] = self.mat[i,j]
-        self.mat = newD
-        self.cols -= 1
-
-    def toMatrix(self):
-        l = []
-        for i in range(self.rows):
-            c = []
-            l.append(c)
-            for j in range(self.cols):
-                if (i, j) in self.mat:
-                    c.append(self[i, j])
-                else:
-                    c.append(0)
-        return Matrix(l)
-
-    def row_list(self):
-        """
-        Returns a Row-sorted list of non-zero elements of the matrix.
-
-        >>> from sympy.matrices import SparseMatrix
-        >>> a=SparseMatrix((1,2),(3,4))
-        >>> a
-        [1, 2]
-        [3, 4]
-        >>> a.RL
-        [(0, 0, 1), (0, 1, 2), (1, 0, 3), (1, 1, 4)]
-        """
-
-        new=[]
-        for i in range(self.rows):
-            for j in range(self.cols):
-                value = self[(i,j)]
-                if value!=0:
-                    new.append((i,j,value))
-        return new
-
-    RL = property(row_list,None,None,"Alternate faster representation")
-
-    def col_list(self):
-        """
-        Returns a Column-sorted list of non-zero elements of the matrix.
-        >>> from sympy.matrices import SparseMatrix
-        >>> a=SparseMatrix((1,2),(3,4))
-        >>> a
-        [1, 2]
-        [3, 4]
-        >>> a.CL
-        [(0, 0, 1), (1, 0, 3), (0, 1, 2), (1, 1, 4)]
-        """
-        new=[]
-        for j in range(self.cols):
-            for i in range(self.rows):
-                value = self[(i,j)]
-                if value!=0:
-                    new.append((i,j,value))
-        return new
-
-    CL = property(col_list,None,None,"Alternate faster representation")
-
-    def transpose(self):
-        """
-        Returns the transposed SparseMatrix of this SparseMatrix
-        >>> from sympy.matrices import SparseMatrix
-        >>> a = SparseMatrix((1,2),(3,4))
-        >>> a
-        [1, 2]
-        [3, 4]
-        >>> a.T
-        [1, 3]
-        [2, 4]
-        """
-        tran = SparseMatrix(self.cols,self.rows,{})
-        for key,value in self.mat.iteritems():
-            tran.mat[key[1],key[0]]=value
-        return tran
-
-    T = property(transpose,None,None,"Matrix transposition.")
-
-
-    def __add__(self, other):
-        if isinstance(other, SparseMatrix):
-            return self.add(other)
-        else:
-            raise NotImplementedError("Only SparseMatrix + SparseMatrix supported")
-
-    def __radd__(self, other):
-        if isinstance(other, SparseMatrix):
-            return self.add(other)
-        else:
-            raise NotImplementedError("Only SparseMatrix + SparseMatrix supported")
-
-    def add(self, other):
-        """
-        Add two sparse matrices with dictionary representation.
-
-        >>> from sympy.matrices.matrices import SparseMatrix
-        >>> A = SparseMatrix(5, 5, lambda i, j : i * j + i)
-        >>> A
-        [0, 0,  0,  0,  0]
-        [1, 2,  3,  4,  5]
-        [2, 4,  6,  8, 10]
-        [3, 6,  9, 12, 15]
-        [4, 8, 12, 16, 20]
-        >>> B = SparseMatrix(5, 5, lambda i, j : i + 2 * j)
-        >>> B
-        [0, 2, 4,  6,  8]
-        [1, 3, 5,  7,  9]
-        [2, 4, 6,  8, 10]
-        [3, 5, 7,  9, 11]
-        [4, 6, 8, 10, 12]
-        >>> A + B
-        [0,  2,  4,  6,  8]
-        [2,  5,  8, 11, 14]
-        [4,  8, 12, 16, 20]
-        [6, 11, 16, 21, 26]
-        [8, 14, 20, 26, 32]
-        """
-        if self.shape != other.shape:
-            raise ShapeError()
-        a, b = self.mat.keys(), other.mat.keys()
-        a.sort()
-        b.sort()
-        i = j = 0
-        c = {}
-        while i < len(a) or j < len(b):
-            if j >= len(b) or (i < len(a) and a[i] < b[j]):
-                c[a[i]] = self.mat[a[i]]
-                i = i + 1
-                continue
-            elif i >= len(a) or (j < len(b) and a[i] > b[j]):
-                c[b[j]] = other.mat[b[j]]
-                j = j + 1
-                continue
-            else:
-                c[a[i]] = self.mat[a[i]] + other.mat[b[j]]
-                i = i + 1
-                j = j + 1
-        return SparseMatrix(self.rows, self.cols, c)
-
-
-
-    # from here to end all functions are same as in matrices.py
-    # with Matrix replaced with SparseMatrix
-    def copyin_list(self, key, value):
-        if not isinstance(value, (list, tuple)):
-            raise TypeError("`value` must be of type list or tuple.")
-        self.copyin_matrix(key, SparseMatrix(value))
-
-    def multiply(self,b):
-        """Returns self*b """
-
-        def dotprod(a,b,i,j):
-            if a.cols != b.rows:
-                raise ShapeError("`self.cols` must equal `b.rows`.")
-            r=0
-            for x in range(a.cols):
-                r+=a[i,x]*b[x,j]
-            return r
-
-        r = SparseMatrix(self.rows, b.cols, lambda i,j: dotprod(self,b,i,j))
-        if r.rows == 1 and r.cols ==1:
-            return r[0,0]
-        return r
-
-    def submatrix(self, keys):
-        if not isinstance(keys[0], slice) and not isinstance(keys[1], slice):
-            raise TypeError("Both elements of `keys` must be slice objects.")
-        rlo, rhi = self.slice2bounds(keys[0], self.rows)
-        clo, chi = self.slice2bounds(keys[1], self.cols)
-        if not ( 0<=rlo<=rhi and 0<=clo<=chi ):
-            raise IndexError("Slice indices out of range: a[%s]"%repr(keys))
-        return SparseMatrix(rhi-rlo, chi-clo, lambda i,j: self[i+rlo, j+clo])
-
-    def reshape(self, _rows, _cols):
-        if len(self) != _rows*_cols:
-            print "Invalid reshape parameters %d %d" % (_rows, _cols)
-        newD = {}
-        for i in range(_rows):
-            for j in range(_cols):
-                m,n = self.rowdecomp(i*_cols + j)
-                if (m,n) in self.mat:
-                    newD[(i,j)] = self.mat[(m,n)]
-        return SparseMatrix(_rows, _cols, newD)
-
-    def cross(self, b):
-        if not isinstance(b, (list, tuple, Matrix)):
-            raise TypeError("`b` must be of type list, tuple, or Matrix, not %s." %
-                type(b))
-        if not (self.rows == 1 and self.cols == 3 or \
-                self.rows == 3 and self.cols == 1 ) and \
-                (b.rows == 1 and b.cols == 3 or \
-                b.rows == 3 and b.cols == 1):
-            raise ShapeError("Dimensions incorrect for cross product")
-        else:
-            return SparseMatrix(1,3,((self[1]*b[2] - self[2]*b[1]),
-                               (self[2]*b[0] - self[0]*b[2]),
-                               (self[0]*b[1] - self[1]*b[0])))
-
-
-    def zeros(self, dims):
-        """Returns a dims = (d1,d2) matrix of zeros."""
-        n, m = _dims_to_nm( dims )
-        return SparseMatrix(n,m,{})
-
-    def eye(self, n):
-        tmp = SparseMatrix(n,n,lambda i,j:0)
-        for i in range(tmp.rows):
-            tmp[i,i] = 1
-        return tmp
-
 
 def list2numpy(l):
     """Converts python list of SymPy expressions to a NumPy array."""

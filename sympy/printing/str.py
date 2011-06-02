@@ -389,8 +389,8 @@ class StrPrinter(Printer):
     _print_set       = __print_set
     _print_frozenset = __print_set
 
-    def _print_SparseMatrix(self, expr):
-        return self._print(expr.toMatrix())
+    def _print_DOKMatrix(self, expr):
+        return self._print_Matrix(expr.toMatrix())
 
     def _print_Sum(self, expr):
         def _xab_tostr(xab):
