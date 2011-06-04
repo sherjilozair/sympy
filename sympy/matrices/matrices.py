@@ -2999,6 +2999,12 @@ def a2idx(a):
     if hasattr(a, "__index__"):
         return a.__index__()
 
+def norm(self, ord=None):
+    if isinstance(self, Matrix):
+        return self.norm(ord)
+    else:
+        raise NotImplementedError("First argument has to be a Matrix object.")
+
 def symarray(prefix, shape):
     """Create a numpy ndarray of symbols (as an object array).
 
