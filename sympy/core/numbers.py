@@ -305,6 +305,8 @@ class Float(Number):
             _mpf_ = mpmath.mpf(num)._mpf_
         if not num:
             return C.Zero()
+        if _mpf_[2] >= 0:    # Implies num is an integer in float form. Example: 2.0
+            return Integer(num)
         obj = Expr.__new__(cls)
         obj._mpf_ = _mpf_
         obj._prec = prec
