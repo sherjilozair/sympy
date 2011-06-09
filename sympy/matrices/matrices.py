@@ -9,6 +9,8 @@ from sympy.printing import sstr
 
 import random
 
+sympify = lambda i:i
+
 class MatrixError(Exception):
     pass
 
@@ -2423,11 +2425,15 @@ def matrix_multiply(A, B):
         raise ShapeError()
     blst = B.T.tolist()
     alst = A.tolist()
-    return Matrix(A.shape[0], B.shape[1], lambda i, j:
+    A = Matrix(A.shape[0], B.shape[1], lambda i, j:
                                         reduce(lambda k, l: k+l,
                                         map(lambda n, m: n*m,
                                         alst[i],
                                         blst[j])))
+    if A.shape == (1, 1):
+        return A[0, 0]
+    else:
+        return A
 
 def matrix_multiply_elementwise(A, B):
     """Return the Hadamard product (elementwise product) of A and B

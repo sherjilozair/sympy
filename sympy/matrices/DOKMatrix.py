@@ -9,7 +9,7 @@ from sympy.simplify import simplify as sympy_simplify
 from sympy.utilities import any, all
 from sympy.printing import sstr
 
-from matrices import Matrix
+from matrices import Matrix, ShapeError
 
 import random
 
@@ -273,15 +273,20 @@ class DOKMatrix(object):
         else:
             raise NotImplementedError("Addition/Subtraction of %s and %s not supported" % (type(self), type(other)))
 
-    def __sub__(self, other):
-        return self.__add__((-1) * other)
-    
     def __mul__(self, other):
         if isinstance(other, DOKMatrix):
             return DOK_matrix_multiply(self, other)
+        elif isinstance(other, Matrix):
+            return self * DOKMatrix.fromMatrix(other)
         else:
             return DOK_scalar_multiply(self, other)
 
+    def __neg__(self):
+        return -1 * self
+
+    def __sub__(self,a):
+        return self + (-a)
+    
     def __rmul__(self, other):
         return self.__mul__(other)  
 
@@ -314,24 +319,12 @@ class DOKMatrix(object):
             raise TypeError("`value` must be of type list or tuple.")
         self.copyin_matrix(key, DOKMatrix(value))
 
+    @classmethod
+    def fromMatrix(cls, matrix):
+        return DOKMatrix(matrix.rows, matrix.cols, lambda i, j: matrix[i, j])
+    
     def rref(self):
         pass
-
-    def multiply(self,b):
-        """Returns self*b """
-
-        def dotprod(a,b,i,j):
-            if a.cols != b.rows:
-                raise ShapeError("`self.cols` must equal `b.rows`.")
-            r=0
-            for x in range(a.cols):
-                r+=a[i,x]*b[x,j]
-            return r
-
-        r = DOKMatrix(self.rows, b.cols, lambda i,j: dotprod(self,b,i,j))
-        if r.rows == 1 and r.cols ==1:
-            return r[0,0]
-        return r
 
     def submatrix(self, keys):
         if not isinstance(keys[0], slice) and not isinstance(keys[1], slice):
@@ -711,10 +704,17 @@ class DOKMatrix(object):
 
     @classmethod
     def eye(cls, n):
-        A = DOKMatrix(n, n, {})
+        A = cls(n, n, {})
         for i in xrange(n):
             A[i, i] = 1
         return A
+
+    @classmethod
+    def zeros(cls, dims):
+        if isinstance(dims, tuple):
+            return cls(dims[0], dims[1], {})
+        else:
+            return cls(dims, dims, {})
 
 def DOK_matrix_multiply(self, other):
     C = DOKMatrix(self.rows, other.cols, {})
@@ -728,6 +728,8 @@ def DOK_matrix_multiply(self, other):
                     C[(i[0], j[1])] += self[i] * other[j]
                 else:
                     C[(i[0], j[1])] = self[i] * other[j]
+    if C.shape == (1, 1):
+        return C[0, 0]
     return C
 
 def DOK_scalar_multiply(matrix, scalar):
