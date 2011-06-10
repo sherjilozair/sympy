@@ -15,7 +15,7 @@ from sympy.core.compatibility import callable, reduce, any, all
 
 import random
 
-sympify = lambda i:i
+# sympify = lambda i:i
 
 class MatrixError(Exception):
     pass

@@ -17,6 +17,8 @@ from sympy.polys import EX, QQ, RR, ZZ
 
 import copy
 
+from sympy.matrices.dict import dok
+
 class DOKMatrix(object):
     """Sparse matrix"""
     def __init__(self, *args, **kwargs):
@@ -24,7 +26,7 @@ class DOKMatrix(object):
         self._cache = {}
         if len(args) == 3 and callable(args[2]):
             op = args[2]
-            if not isinstance(args[0], (int, Integer)) or not isinstance(args[1], (int, Integer)):
+            if not isinstance(args[0], int) or not isinstance(args[1], int):
                 raise TypeError("`args[0]` and `args[1]` must both be integers.")
             self.rows = args[0]
             self.cols = args[1]
@@ -52,7 +54,9 @@ class DOKMatrix(object):
             self.mat = {}
             # manual copy, copy.deepcopy() doesn't work
             for key in args[2].keys():
-                self.mat[key] = args[2][key]
+                val = args[2][key]
+                if val != 0:
+                    self.mat[key] = val
         else:
             if len(args) == 1:
                 mat = args[0]
@@ -106,7 +110,7 @@ class DOKMatrix(object):
             raise ValueError("`key` must be of length 2.")
 
         if isinstance(key[0], slice) or isinstance(key[1], slice):
-            if isinstance(value, Matrix):
+            if isinstance(value, (DOKMatrix, Matrix)):
                 self.copyin_matrix(key, value)
             if isinstance(value, (list, tuple)):
                 self.copyin_list(key, value)
@@ -121,6 +125,18 @@ class DOKMatrix(object):
 
     def clear_cache(self):
         self._cache = {} 
+
+    def copyin_matrix(self, key, value):
+        rlo, rhi = self.slice2bounds(key[0], self.rows)
+        clo, chi = self.slice2bounds(key[1], self.cols)
+        if value.rows != rhi - rlo or value.cols != chi - clo:
+            raise ShapeError("The Matrix `value` doesn't have the same dimensions " +
+                "as the in sub-Matrix given by `key`.")
+
+        for i in range(value.rows):
+            for j in range(value.cols):
+                self[i+rlo, j+clo] = sympify(value[i,j])
+
 
     def row_del(self, k):
         newD = {}
@@ -190,13 +206,15 @@ class DOKMatrix(object):
         n = self.rows
         keys = sorted(self.mat.keys())
         lil = [[]] * n
+        if not keys:
+            return lil
         k = 0
         start = 0
         for i in xrange(len(keys)):
-            if keys[i][0] == k + 1:
+            if keys[i][0] > k:
                 lil[k] = keys[start:i]
                 start = i
-                k += 1
+                k = keys[i][0]
         lil[keys[-1][0]] = keys[start:]
         self._cache['lil_row_major'] = lil
         return lil
@@ -209,14 +227,16 @@ class DOKMatrix(object):
         n = self.cols
         keys = [(i, j) for (j, i) in sorted((j,i) for (i, j) in self.mat.keys())]
         lil = [[]] * n
+        if not keys:
+            return lil
         k = 0
         start = 0
         for i in xrange(len(keys)):
-            if keys[i][1] == k + 1:
+            if keys[i][1] > k:
                 lil[k] = keys[start:i]
                 start = i
-                k += 1
-        lil[keys[-1][1]].append(keys[start:])
+                k = keys[i][0]
+        lil[keys[-1][1]] = keys[start:]
         self._cache['lil_col_major'] = lil
         return lil
             
@@ -275,7 +295,7 @@ class DOKMatrix(object):
 
     def __mul__(self, other):
         if isinstance(other, DOKMatrix):
-            return DOK_matrix_multiply(self, other)
+            return DOK_matrix_multiply_row_major(self, other)
         elif isinstance(other, Matrix):
             return self * DOKMatrix.fromMatrix(other)
         else:
@@ -291,6 +311,8 @@ class DOKMatrix(object):
         return self.__mul__(other)  
 
     def __eq__(self, other):
+        if not isinstance(other, (Matrix, DOKMatrix)):
+            return False
         if self.rows != other.rows or self.cols != other.cols:
             return False
         for i in xrange(self.rows):
@@ -305,11 +327,9 @@ class DOKMatrix(object):
         M = DOKMatrix(self.rows, self.cols, self.mat) # self[:,:] should be as fast as this
         for i in other.mat:
             if i in M.mat:
-                M.mat[i] += other.mat[i]
-                if M.mat[i] == 0:
-                    del M.mat[i]
+                M[i] += other[i]
             else:
-                M.mat[i] = other.mat[i]
+                M[i] = other[i]
         return M
 
     # from here to end all functions are same as in matrices.py
@@ -322,9 +342,25 @@ class DOKMatrix(object):
     @classmethod
     def fromMatrix(cls, matrix):
         return DOKMatrix(matrix.rows, matrix.cols, lambda i, j: matrix[i, j])
-    
-    def rref(self):
+
+    def LUdecom(self):
+        cols = self._lil_col_major()
+        A = self[:,:]
+        for k in xrange(self.rows):
+            for i, _ in cols[k]:
+                if i > k:
+                    A[i, k] = A[i, k] / A[k, k]
         pass
+        return A
+
+    def factor_lower(self):
+        L = [None] * self.rows
+        for i in xrange(self.rows):
+            l = DOKMatrix.eye(self.rows)
+            l[:, i] = self[:, i]
+            L[i] = l
+        return L 
+                
 
     def submatrix(self, keys):
         if not isinstance(keys[0], slice) and not isinstance(keys[1], slice):
@@ -674,7 +710,7 @@ class DOKMatrix(object):
         return X
         
     def _LDL_solve(self, rhs):
-        L, D = self._LDL()
+        L, D = self._LDL_sparse()
         z = L._lower_triangular_solve(rhs)
         y = D._diagonal_solve(z)
         x = L.T._upper_triangular_solve(y)
@@ -692,6 +728,24 @@ class DOKMatrix(object):
             return det
         else:
             raise Exception('No such method')
+
+    def conjgrad(A, b, x = None):
+        if x == None:
+            x = DOKMatrix.zeros((A.rows, 1))
+        r = b - A * x
+        p = r[:,:]
+        rsold = r.T * r
+        for i in xrange(A.rows):
+            Ap = A * p
+            alpha = rsold / (p.T * Ap)
+            x = x + alpha * p
+            r = r - alpha * Ap
+            rsnew = r.T * r
+            if rsnew < 10 ** -20:
+                break
+            p = r + (rsnew/rsold ) * p
+            rsold = rsnew
+        return x
     
     def test_sparse_dense(self):
         A = self.toMatrix().cholesky().applyfunc(lambda i: 1 if i!=0 else 0)
@@ -731,6 +785,45 @@ def DOK_matrix_multiply(self, other):
     if C.shape == (1, 1):
         return C[0, 0]
     return C
+
+def DOK_matrix_multiply_row_major(A, B):
+    rows1 = A._lil_row_major()
+    rows2 = B._lil_row_major()
+    Cdict = {}
+    for k in xrange(A.rows):
+        for _, j in rows1[k]:
+            for _, n  in rows2[j]:
+                temp = A.mat[k, j] * B.mat[j, n]
+                if (k, n) in Cdict:
+                    Cdict[k, n] += temp
+                else:
+                    Cdict[k, n] = temp
+    C = DOKMatrix(A.rows, B.cols, Cdict)
+    if C.shape == (1, 1):
+        return C[0, 0]
+    return C
+
+def DOK_matrix_multiply_elem_major(A, B):
+    rows = A._lil_row_major()
+    cols = B._lil_col_major()
+    C = DOKMatrix(A.rows, B.cols, {})
+    for i in xrange(A.rows):
+        for j in xrange(B.cols):
+            temp = 0
+            for _, q in rows[i]:
+                for m, _ in cols[j]:
+                    if q == m:
+                        temp += A[i, q] * B[m, j]
+            C[i, j] = temp
+    return C
+                        
+                    
+                
+
+def DOK_matrix_multiply_col_major(A, B):
+    cols = A._lil_col_major()
+    rows = B._lil_row_major()
+    
 
 def DOK_scalar_multiply(matrix, scalar):
     C = DOKMatrix(matrix.rows, matrix.cols, {})
