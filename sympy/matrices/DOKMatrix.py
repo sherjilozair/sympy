@@ -710,7 +710,7 @@ class DOKMatrix(object):
         return X
         
     def _LDL_solve(self, rhs):
-        L, D = self._LDL_sparse()
+        L, D = self._LDL()
         z = L._lower_triangular_solve(rhs)
         y = D._diagonal_solve(z)
         x = L.T._upper_triangular_solve(y)
@@ -735,17 +735,53 @@ class DOKMatrix(object):
         r = b - A * x
         p = r[:,:]
         rsold = r.T * r
-        for i in xrange(A.rows):
+        i=0
+        # for i in xrange(A.rows):
+        while(True):
+            i += 1
             Ap = A * p
             alpha = rsold / (p.T * Ap)
             x = x + alpha * p
             r = r - alpha * Ap
             rsnew = r.T * r
-            if rsnew < 10 ** -20:
+            print rsnew
+            if rsnew < 10 ** -15:
                 break
             p = r + (rsnew/rsold ) * p
             rsold = rsnew
+        print i
         return x
+
+    def conjgrad_pre(A, b, T = None, x = None, maxiter = None, 
+        epsilon = 10**-15):
+        if not maxiter:
+            maxiter = 10 * A.rows
+        if not T:
+            T = DOKMatrix(A.rows, A.cols, lambda i, j:
+                1/A[i, j] if i == j else 0)
+        if not x:
+            x = DOKMatrix.zeros((A.rows, 1))
+        i = 0
+        r = b - A * x
+        d = T * r
+        delnew = r.T * d
+        del0 = delnew
+        while(i < maxiter and delnew > (epsilon**2) * del0):
+            q = A * d
+            alpha = delnew/(d.T * q)
+            x += alpha * d
+            if not i % 50:
+                r = b - A * x
+            else:
+                r = r - alpha * q
+            s = T * r
+            delold = delnew
+            delnew = r.T * s
+            beta = delnew / delold
+            d = s + beta * d
+            i = i + 1
+        return x  
+        
     
     def test_sparse_dense(self):
         A = self.toMatrix().cholesky().applyfunc(lambda i: 1 if i!=0 else 0)
