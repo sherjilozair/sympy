@@ -9,7 +9,7 @@ from sympy.printing import sstr
 
 import random
 
-sympify = lambda i:i
+# sympify = lambda i:i
 
 class MatrixError(Exception):
     pass
