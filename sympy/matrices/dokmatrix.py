@@ -724,7 +724,7 @@ class DOKMatrix(object):
             L = (self.T * self)._cholesky()
             det = 1
             for i in xrange(L.rows):
-                det *= L.mat[i,i]
+                det *= L[i,i]
             return det
         else:
             raise Exception('No such method')
