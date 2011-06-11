@@ -1,18 +1,18 @@
 """Ground types for various mathematical domains in SymPy. """
 
-HAS_GMPY = True
+HAS_GMPY = False
 
-try:
-    import gmpy
-except ImportError:
-    HAS_GMPY = False
-else:
-    try:
-        int(gmpy.mpz(2**256))
-    except OverflowError:
-        from warnings import warn
-        warn("gmpy library is too old, can't take advantage of it")
-        HAS_GMPY = False
+#try:
+#    import gmpy
+#except ImportError:
+#    HAS_GMPY = False
+#else:
+#    try:
+#        long(gmpy.mpz(2**256))
+#    except OverflowError:
+#        from warnings import warn
+#        warn("gmpy library is too old, can't take advantage of it")
+#        HAS_GMPY = False
 
 from __builtin__ import (
     int     as PythonIntegerType,
