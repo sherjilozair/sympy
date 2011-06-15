@@ -789,7 +789,7 @@ class DOKMatrix(object):
             p = r + (rsnew/rsold ) * p
             rsold = rsnew
         print i
-        return x
+        return x 
 
     def conjgrad_pre(A, b, T = None, x = None, maxiter = None, 
         epsilon = 10**-15):
