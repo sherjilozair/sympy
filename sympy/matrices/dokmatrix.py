@@ -17,8 +17,6 @@ from sympy.polys import EX, QQ, RR, ZZ
 
 import copy
 
-from sympy.matrices.dict import dok
-
 class DOKMatrix(object):
     """Sparse matrix"""
     def __init__(self, *args, **kwargs):
