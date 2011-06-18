@@ -392,6 +392,9 @@ class StrPrinter(Printer):
     def _print_DOKMatrix(self, expr):
         return self._print_Matrix(expr.toMatrix())
 
+    def _print_LILMatrix(self, expr):
+        return self._print_Matrix(expr.toMatrix())
+
     def _print_Sum(self, expr):
         def _xab_tostr(xab):
             if len(xab) == 1:

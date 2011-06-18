@@ -444,6 +444,9 @@ class PrettyPrinter(Printer):
     def _print_DOKMatrix(self, e):
         return self._print_Matrix(e)
 
+    def _print_LILMatrix(self, e):
+        return self._print_Matrix(e)
+
     def _print_Matrix(self, e):
         M = e   # matrix
         Ms = {}  # i,j -> pretty(M[i,j])

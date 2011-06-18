@@ -8,7 +8,7 @@ from sympy.utilities.pytest import raises
 #from sympy.functions.elementary.miscellaneous import Max, Min
 #from sympy.functions.elementary.miscellaneous import Max, Min
 
-from sympy.matrices.DOKMatrix import DOKMatrix
+from sympy.matrices.dokmatrix import DOKMatrix
 
 def test_division():
     x, y, z = symbols('x y z')
