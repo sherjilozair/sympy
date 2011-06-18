@@ -480,7 +480,7 @@ class DOKMatrix(object):
                 NZlist[k] = keys[start:i]
                 startset = False
             k = keys[i][0]
-            if not startset and keys[i][0] == k and not NZlist[k]:
+            if not startset and keys[i][1] <= keys[i][0] and keys[i][0] == k and not NZlist[k]:
                 start = i
                 startset = True
         NZlist[keys[start][0]] = keys[start:]
@@ -863,6 +863,8 @@ def _lil(keys, n, j):
         else [k for k in keys if k[j] == i ]
         for i in xrange(n) ]
     return lil
+
+lil = _lil
 
 def DOK_matrix_multiply(self, other):
     C = DOKMatrix(self.rows, other.cols, {})
