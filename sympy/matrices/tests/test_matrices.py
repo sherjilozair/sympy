@@ -5,7 +5,7 @@ from sympy.matrices.matrices import (ShapeError, MatrixError,
     matrix_multiply_elementwise, diag, NonSquareMatrixError, _dims_to_nm)
 from sympy.utilities.pytest import raises
 
-from sympy.matrices.DOKMatrix import DOKMatrix
+from sympy.matrices.dokmatrix import DOKMatrix
 
 def test_division():
     x, y, z = symbols('x y z')

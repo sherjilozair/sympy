@@ -10,3 +10,5 @@ from matrices import (Matrix, zeros, ones, eye, diag,
 from randmatrix import randMatrix
 
 from dokmatrix import *
+
+from lilmatrix import *
