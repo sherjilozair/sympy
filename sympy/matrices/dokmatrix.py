@@ -199,8 +199,6 @@ class DOKMatrix(object):
         return keys[start:end]
 
     def _lil_row_major(self):
-        if 'lil_row_major' in self._cache:
-            return self._cache['lil_row_major']
         n = self.rows
         keys = sorted(self.mat.keys())
         lil = [[]] * n
@@ -842,6 +840,29 @@ class DOKMatrix(object):
             return cls(dims[0], dims[1], {})
         else:
             return cls(dims, dims, {})
+    def _lil_row_lower(A):
+        return A._lil_lower(0)
+
+    def _lil_col_lower(A):
+        return A._lil_lower(1)
+
+    def _lil_lower(A, j):
+        lower = [k for k in A.mat.iterkeys() if k[0] >= k[1]]
+        return _lil(lower, A.cols, j)
+
+    def _lil_row(A):
+        return _lil(A.mat.keys(), A.cols, 0)
+
+    def _lil_col(A):
+        return _lil(A.mat.keys(), A.cols, 1) 
+
+def _lil(keys, n, j):
+    keys.sort()
+    zeros = set(xrange(n)) - set(k[j] for k in keys)
+    lil = [ [] if i in zeros 
+        else [k for k in keys if k[j] == i ]
+        for i in xrange(n) ]
+    return lil
 
 def DOK_matrix_multiply(self, other):
     C = DOKMatrix(self.rows, other.cols, {})
@@ -971,5 +992,4 @@ def transformation_matrix(f, A, B):
 
 def mat(n, d):
     A = randInvDOKMatrix(n, d)
-    return A.T * A 
-    
+    return A.T * A
