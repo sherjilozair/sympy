@@ -460,7 +460,7 @@ class DOKMatrix(object):
         k = 0
         startset = False
         for i in xrange(len(keys)):
-            if startset and keys[i][1] == k + 1:
+            if startset and keys[i][1] > k:
                 NZlist[k] = keys[start:i]
                 startset = False
             k = keys[i][1]
@@ -478,14 +478,14 @@ class DOKMatrix(object):
         k = 0
         startset = False
         for i in xrange(len(keys)):
-            if startset and (keys[i][0] == k + 1 or keys[i][1] > keys[i][0]):
+            if startset and (keys[i][0] > k or keys[i][1] > keys[i][0]):
                 NZlist[k] = keys[start:i]
                 startset = False
             k = keys[i][0]
             if not startset and keys[i][0] == k and not NZlist[k]:
                 start = i
                 startset = True
-        NZlist[-1] = keys[start:]
+        NZlist[keys[start][0]] = keys[start:]
         return NZlist
 
     def cholesky_structure_wiki(self):
