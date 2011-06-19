@@ -1,6 +1,6 @@
 import random
 from sympy.matrices import Matrix
-from sympy.printing import sstr
+from sympy.printing import sstr, pretty
 from sympy.simplify.simplify import simplify as sympy_simplify
 def _iszero(x):
     return x == 0
@@ -320,15 +320,56 @@ class LILMatrix(object):
 
     def gauss_sparse(self):
         A = self[:, :]
-        for j in xrange(A.cols):
-            for i in xrange(j+1, A.rows):
-                print A
-                A.row_add(i, j, - float(A[i, j])/A[j, j])
-        return A
-        
+        for i in xrange(A.rows):
+            if A[i, i] == 0:
+                print 'bad pivot, exchanging', i
+                for k in xrange(i + 1, A.rows):
+                    print '\tconsidering', k, i
+                    if A[k, i] != 0:
+                        print '\t\tfound', k, i
+                        print pretty(A)
+                        print
 
+                        A.row_swap(k, i)
+
+                        print pretty(A)
+                        break
+                if A[i, i] == 0:
+                    print 'bad bad pivot', i
+                    print pretty(A)
+                    raise Exception
+            ind = 0
+            l = len(A.mat[i])
+            while ind < l:
+                j, v = A.mat[i][ind]
+                if j < i:
+                    print 'zeroing out', i, j, A.mat[i]
+                    A.row_add(i, j, - v / A[j, j])
+                    print 'zeroed out', i, j, A.mat[i]
+                    l = len(A.mat[i])
+                else:
+                    break
+        return A
+
+    def gauss_col(self):
+        A = self[:, :]
+        for k in xrange(A.cols):
+            rlist = A.nz_col(k)
             
+
+    def nz_col(self, j):
+        li = []
+        for i in xrange(self.rows):
+            if self[i, j] != 0:
+                li.append(i)
+        return li
+                
             
+
+    def applyfunc(self, f):
+        for i in xrange(self.rows):
+            for ind, (j, value) in enumerate(self.mat[i]):
+                self.mat[i][ind] = (self.mat[i][ind][0], f(self.mat[i][ind][1]))
 
 def randInvLILMatrix(n, d, min=-5, max=10):
     A = LILMatrix(n, n, lambda i, j: random.randint(min, max) if abs(i - j) <= d-1 else 0)
