@@ -384,6 +384,12 @@ class LILMatrix(object):
             for ind, (j, value) in enumerate(self.mat[i]):
                 self.mat[i][ind] = (self.mat[i][ind][0], f(self.mat[i][ind][1]))
 
+    def sparsity(self):
+        return float(self.nnz()) / (self.rows * self.cols)
+
+    def nnz(self):
+        return sum(len(self.mat[i]) for i in xrange(self.rows))
+
 def randInvLILMatrix(n, d, min=-5, max=10):
     A = LILMatrix(n, n, lambda i, j: random.randint(min, max) if abs(i - j) <= d-1 else 0)
     return A
