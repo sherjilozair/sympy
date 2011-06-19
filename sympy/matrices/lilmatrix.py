@@ -189,7 +189,7 @@ class LILMatrix(object):
             else:
                 val = row1[i1][1] + alpha * row2[i2][1]
                 if val != 0:
-                    li.append((row1[i1][0], val)
+                    li.append((row1[i1][0], val))
                 i1 += 1
                 i2 += 1
         self.mat[r1] = li
