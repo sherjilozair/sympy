@@ -1,3 +1,4 @@
+from __future__ import division
 import random
 from sympy.matrices import Matrix
 from sympy.printing import sstr, pretty
@@ -105,7 +106,7 @@ class LILMatrix(object):
         #     raise Exception
         i, j = key
         if type(i) is slice or type(j) is slice:
-                return self.submatrix(key)
+                return self.submatrix2(key)
         for j2, val in self.mat[i]:
             if j2 >= j:
                 if j2 == j:
@@ -132,7 +133,34 @@ class LILMatrix(object):
                     return
         if value != 0:
             self.mat[i].append((j, value))
-        
+
+    def submatrix2(self, keys):
+        if not isinstance(keys[0], slice) and not isinstance(keys[1], slice):
+            raise TypeError("At least one element of `keys` must be a slice object.")
+
+        rlo, rhi = self.slice2bounds(keys[0], self.rows)
+        clo, chi = self.slice2bounds(keys[1], self.cols)
+        if not ( 0<=rlo<=rhi<=self.rows and 0<=clo<=chi<=self.cols ):
+            raise IndexError("Slice indices out of range: a[%s]"%repr(keys))
+        outRows, outCols = rhi-rlo, chi-clo
+        outMat = []
+        for i in xrange(rlo, rhi):
+            startset = False
+            start = end = len(self.mat[i])
+            for ind, (j, val) in enumerate(self.mat[i]):
+                if j >= clo and not startset:
+                    start = ind
+                    startset = True
+                if j >= chi:
+                    end = ind
+                    break
+            outMat.append(self.mat[i][start:end])
+        for i in xrange(len(outMat)):
+            for ind, (j, val) in enumerate(outMat[i]):
+                 outMat[i][ind] = (j - clo, val)
+        A = LILMatrix.zeros((outRows, outCols))
+        A.mat = outMat
+        return A
 
     def submatrix(self, keys):
         if not isinstance(keys[0], slice) and not isinstance(keys[1], slice):
@@ -156,7 +184,7 @@ class LILMatrix(object):
                     end = ind
                     break
             outMat.append(self.mat[i][start:end])
-        A = LILMatrix.zeros((self.rows, self.cols))
+        A = LILMatrix.zeros((outRows, outCols))
         A.mat = outMat
         return A
 
@@ -195,11 +223,8 @@ class LILMatrix(object):
         self.mat[r1] = li
 
     def row_scale(self, r, alpha):
-        nnz = len(self.mat[r])
-        li = [0] * nnz
-        for ind in xrange(nnz):
-            li[ind] = (self.mat[r][ind][0], alpha * self.mat[r][ind][1])
-        self.mat[r] = li
+        for ind, (j, val) in enumerate(self.mat[r]):
+            self.mat[r][ind] = (j, alpha * val)
 
     def row_add_bad(self, r1, r2, alpha):
         row2 = self.mat[r2]
@@ -222,42 +247,6 @@ class LILMatrix(object):
             return cls(shape[0], shape[1], lambda i,j:0)
         else:
             return cls(shape, shape, lambda i, j: 0)
-            
-
-    def rref(self,simplified=False, iszerofunc=_iszero, simplify=sympy_simplify):
-        """
-        Take any matrix and return reduced row-echelon form and indices of pivot vars
-
-        To simplify elements before finding nonzero pivots set simplified=True.
-        To set a custom simplify function, use the simplify keyword argument.
-        """
-        # TODO: rewrite inverse_GE to use this
-        pivots, r = 0, self[:,:]        # pivot: index of next row to contain a pivot
-        pivotlist = []                  # indices of pivot variables (non-free)
-        for i in range(r.cols):
-            if pivots == r.rows:
-                break
-            if simplified:
-                r[pivots,i] = simplify(r[pivots,i])
-            if iszerofunc(r[pivots,i]):
-                for k in range(pivots, r.rows):
-                    if simplified and k > pivots:
-                        r[k,i] = simplify(r[k,i])
-                    if not iszerofunc(r[k,i]):
-                        break
-                if k == r.rows - 1 and iszerofunc(r[k,i]):
-                    continue
-                r.row_swap(pivots,k)
-            scale = r[pivots,i]
-            r.row(pivots, lambda x, _: x/scale)
-            for j in range(r.rows):
-                if j == pivots:
-                    continue
-                scale = r[j,i]
-                r.row(j, lambda x, k: x - scale*r[pivots,k])
-            pivotlist.append(i)
-            pivots += 1
-        return r, pivotlist
 
     def LUdecomposition_Simple(self, iszerofunc=_iszero):
         """
@@ -354,9 +343,9 @@ class LILMatrix(object):
         return A
 
     def gauss_col(self):
-        "gaussian elimnation, currently tested only on square matrices"
+        "Gaussian elimnation, currently tested only on square matrices"
         A = self[:, :]
-        for j in xrange(A.cols):
+        for j in xrange(A.rows):
             rlist = A.nz_col_lower(j)
             if A[j, j] == 0:
                 if rlist:
@@ -367,6 +356,53 @@ class LILMatrix(object):
             for i in rlist:
                 A.row_add(i, j, - A[i, j] / A[j, j])
         return A
+
+    def rref2(self):
+        pivot, r = 0, self[:,:]
+        pivotlist = []
+        for i in range(r.cols):
+            if pivot == r.rows:
+                break
+            if r[pivot,i] == 0:
+                for k in xrange(pivot + 1, r.rows):
+                    if r[k, i] != 0:
+                        r.row_swap(pivot, k)
+                        break
+                if r[pivot, i] == 0:
+                    continue
+            r.row_scale(pivot, 1 / r[pivot, i])
+            for j in r.nz_col(i):
+                if j == pivot:
+                    continue
+                scale = r[j,i]
+                r.row_add(j, pivot, - scale)
+            pivotlist.append(i)
+            pivot += 1
+        return r, pivotlist
+
+    def rref(self):
+        "rref"
+        A = self[:, :]
+        for j in xrange(A.rows):
+            rlist = A.nz_col_lower(j)
+            if A[j, j] == 0:
+                if rlist:
+                    A.row_swap(j, rlist[0])
+                    rlist.pop(0)
+                else:
+                    continue
+            A.row_scale(j, 1/A[j, j])
+            for i in A.nz_col(j):
+                if i != j:
+                    A.row_add(i, j, - A[i, j])
+        return A
+                    
+    def nz_col(self, j):
+        li = []
+        for i in xrange(self.rows):
+            if self[i, j] != 0:
+                li.append(i)
+        return li
 
     def nz_col_lower(self, j):
         " Returns the row indices of non-zero elements in column j, below the diagonal"
