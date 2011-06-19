@@ -169,6 +169,7 @@ class LILMatrix(object):
         raise NotImplemented
 
     def row_add(self, r1, r2, alpha):
+        "row1 = row1 + alpha * row2 "
         if r1 == r2:
             return
         row1 = self.mat[r1]
@@ -353,6 +354,7 @@ class LILMatrix(object):
         return A
 
     def gauss_col(self):
+        "gaussian elimnation, currently tested only on square matrices"
         A = self[:, :]
         for j in xrange(A.cols):
             rlist = A.nz_col_lower(j)
@@ -367,6 +369,7 @@ class LILMatrix(object):
         return A
 
     def nz_col_lower(self, j):
+        " Returns the row indices of non-zero elements in column j, below the diagonal"
         li = []
         for i in xrange(j + 1, self.rows):
             if self[i, j] != 0:
@@ -376,9 +379,6 @@ class LILMatrix(object):
     def is_upper(self):
         return all(j >= i for i in xrange(self.rows) for j, _ in self.mat[i])
             
-                
-            
-
     def applyfunc(self, f):
         for i in xrange(self.rows):
             for ind, (j, value) in enumerate(self.mat[i]):
@@ -392,6 +392,7 @@ def test(n, d):
     A = randInvLILMatrix(n, d)
     A.applyfunc(S)
     B = A.gauss_col()
-    assert B.is_upper(), B
+    if not B.is_upper():
+        return A, A.toMatrix().det()
 
     
