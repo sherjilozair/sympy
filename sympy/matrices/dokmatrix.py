@@ -856,6 +856,10 @@ class DOKMatrix(object):
     def _lil_col(A):
         return _lil(A.mat.keys(), A.cols, 1) 
 
+
+def list2lil(keys, n, j):
+    lil = [[]] * n
+
 def _lil(keys, n, j):
     keys.sort()
     zeros = set(xrange(n)) - set(k[j] for k in keys)
