@@ -2,6 +2,7 @@ import random
 from sympy.matrices import Matrix
 from sympy.printing import sstr, pretty
 from sympy.simplify.simplify import simplify as sympy_simplify
+from sympy import S
 def _iszero(x):
     return x == 0
 
@@ -353,16 +354,28 @@ class LILMatrix(object):
 
     def gauss_col(self):
         A = self[:, :]
-        for k in xrange(A.cols):
-            rlist = A.nz_col(k)
-            
+        for j in xrange(A.cols):
+            rlist = A.nz_col_lower(j)
+            if A[j, j] == 0:
+                if rlist:
+                    A.row_swap(j, rlist[0])
+                    rlist.pop(0)
+                else:
+                    return A
+            for i in rlist:
+                A.row_add(i, j, - A[i, j] / A[j, j])
+        return A
 
-    def nz_col(self, j):
+    def nz_col_lower(self, j):
         li = []
-        for i in xrange(self.rows):
+        for i in xrange(j + 1, self.rows):
             if self[i, j] != 0:
                 li.append(i)
         return li
+
+    def is_upper(self):
+        return all(j >= i for i in xrange(self.rows) for j, _ in self.mat[i])
+            
                 
             
 
@@ -374,5 +387,11 @@ class LILMatrix(object):
 def randInvLILMatrix(n, d, min=-5, max=10):
     A = LILMatrix(n, n, lambda i, j: random.randint(min, max) if abs(i - j) <= d-1 else 0)
     return A
+
+def test(n, d):
+    A = randInvLILMatrix(n, d)
+    A.applyfunc(S)
+    B = A.gauss_col()
+    assert B.is_upper(), B
 
     
