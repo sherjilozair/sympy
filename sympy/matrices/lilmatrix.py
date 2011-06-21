@@ -4,6 +4,7 @@ from sympy.matrices import Matrix
 from sympy.printing import sstr, pretty
 from sympy.simplify.simplify import simplify as sympy_simplify
 from sympy import S
+
 def _iszero(x):
     return x == 0
 
@@ -21,7 +22,7 @@ class LILMatrix(object):
             for i in xrange(self.rows):
                 for j in xrange(self.cols):
                     value = self.type(op(i,j))
-                    if value != 0:
+                    if value != self.type(0):
                         self.mat[i].append((j, value))
         elif len(args)==3 and isinstance(args[0],int) and \
                 isinstance(args[1],int) and isinstance(args[2], (list, tuple)):
@@ -32,7 +33,7 @@ class LILMatrix(object):
             for i in range(self.rows):
                 for j in range(self.cols):
                     value = self.type(mat[i*self.cols+j])
-                    if value != 0:
+                    if value != self.type(0):
                         self.mat[i].append((j, value))
         elif len(args)==3 and isinstance(args[0],int) and \
                 isinstance(args[1],int) and isinstance(args[2], dict):
@@ -42,7 +43,7 @@ class LILMatrix(object):
             # manual copy, copy.deepcopy() doesn't work
             for key in args[2].keys():
                 val = args[2][key]
-                if val != 0:
+                if val != self.type(0):
                     self.mat[i].append((j, value))
         else:
             if len(args) == 1:
@@ -59,7 +60,7 @@ class LILMatrix(object):
                     raise ValueError("All arguments must have the same length.")
                 for j in range(self.cols):
                     value = self.type(mat[i][j])
-                    if value != 0:
+                    if value != self.type(0):
                         self.mat[i].append((j, value))
 
     def __str__(self):
@@ -69,7 +70,7 @@ class LILMatrix(object):
         return sstr(self.toMatrix())
 
     def toMatrix(self):
-        mat = [[0] * self.cols for i in xrange(self.rows)]
+        mat = [[self.type(0)] * self.cols for i in xrange(self.rows)]
         for i in xrange(self.rows):
             for j, val in self.mat[i]:
                 mat[i][j] = val
@@ -112,8 +113,12 @@ class LILMatrix(object):
                 if j2 == j:
                     return val
                 else:
-                    return 0
-        return 0
+                    return self.type(0)
+        return self.type(0)
+
+    def set_type(self, type):
+        self.type = type
+        self.applyfunc(type)
 
     def __setitem__(self, key, value):
         if not (0, 0) <= key < (self.rows, self.cols):
@@ -216,7 +221,7 @@ class LILMatrix(object):
                 i2 += 1
             else:
                 val = row1[i1][1] + alpha * row2[i2][1]
-                if val != 0:
+                if val != self.type(0):
                     li.append((row1[i1][0], val))
                 i1 += 1
                 i2 += 1
@@ -347,7 +352,7 @@ class LILMatrix(object):
         A = self[:, :]
         for j in xrange(A.rows):
             rlist = A.nz_col_lower(j)
-            if A[j, j] == 0:
+            if A[j, j] == self.type(0):
                 if rlist:
                     A.row_swap(j, rlist[0])
                     rlist.pop(0)
@@ -370,7 +375,7 @@ class LILMatrix(object):
                         break
                 if r[pivot, i] == 0:
                     continue
-            r.row_scale(pivot, 1 / r[pivot, i])
+            r.row_scale(pivot, self.type(1) / r[pivot, i])
             for j in r.nz_col(i):
                 if j == pivot:
                     continue
@@ -385,13 +390,14 @@ class LILMatrix(object):
         A = self[:, :]
         for j in xrange(A.rows):
             rlist = A.nz_col_lower(j)
-            if A[j, j] == 0:
+            if A[j, j] == self.type(0):
                 if rlist:
                     A.row_swap(j, rlist[0])
                     rlist.pop(0)
                 else:
                     continue
-            A.row_scale(j, 1/A[j, j])
+            print j, A[j, j]
+            A.row_scale(j, self.type(1) /  A[j, j])
             for i in A.nz_col(j):
                 if i != j:
                     A.row_add(i, j, - A[i, j])
@@ -400,7 +406,7 @@ class LILMatrix(object):
     def nz_col(self, j):
         li = []
         for i in xrange(self.rows):
-            if self[i, j] != 0:
+            if self[i, j] != self.type(0):
                 li.append(i)
         return li
 
@@ -408,7 +414,7 @@ class LILMatrix(object):
         " Returns the row indices of non-zero elements in column j, below the diagonal"
         li = []
         for i in xrange(j + 1, self.rows):
-            if self[i, j] != 0:
+            if self[i, j] != self.type(0):
                 li.append(i)
         return li
 
@@ -425,6 +431,29 @@ class LILMatrix(object):
 
     def nnz(self):
         return sum(len(self.mat[i]) for i in xrange(self.rows))
+
+    def join_rows(A, B):
+        A = A[:, :]
+        B = B[:, :]
+        assert A.rows == B.rows
+        for i in xrange(B.rows):
+            for ind, (j, val) in enumerate(B.mat[i]):
+                B.mat[i][ind] = (j + A.cols, val)
+            A.mat[i].extend(B.mat[i])
+        A.cols += B.cols
+        return A
+
+    @classmethod
+    def eye(cls, n, one = 1, zero = 0):
+        return cls(n, n, lambda i, j: one if i==j else zero)
+
+    def inv_rref(self):
+        aug = self.join_rows(LILMatrix.eye(self.rows, one = self.type(1), zero = self.type(0)))
+        reduced = aug.rref()
+        return reduced[:,self.rows:]
+        
+        
+        
 
 def randInvLILMatrix(n, d, min=-5, max=10):
     A = LILMatrix(n, n, lambda i, j: random.randint(min, max) if abs(i - j) <= d-1 else 0)
