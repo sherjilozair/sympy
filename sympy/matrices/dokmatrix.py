@@ -81,7 +81,7 @@ class DOKMatrix(object):
                 if (i, j) in self.mat:
                     return self.mat[i, j]
                 elif (0, 0) <= key < self.shape:
-                    return 0
+                    return self.type(0)
                 else:
                     raise IndexError
             elif isinstance(i, slice) or isinstance(j, slice):
@@ -89,7 +89,10 @@ class DOKMatrix(object):
             else:
                 raise TypeError
         
-                
+    def set_type(self, type):
+        self.type = type
+        self.applyfunc(type)
+   
     def rowdecomp(self, num):
         nmax = len(self)
         if not (0 <= num < nmax) and not (0 <= -num < nmax):
