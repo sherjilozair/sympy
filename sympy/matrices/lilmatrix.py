@@ -127,16 +127,16 @@ class LILMatrix(object):
         for ind, (j2, val) in enumerate(self.mat[i]):
             if j2 >= j:
                 if j2 == j:
-                    if value == 0:
+                    if value == self.tyep(0):
                         self.mat[i].pop(ind)
                     else:
                         self.mat[i][ind] = (j, value)
                     return
                 else:
-                    if value != 0:
+                    if value != self.type(0):
                         self.mat[i].insert(ind, (j, value))
                     return
-        if value != 0:
+        if value != self.type(0):
             self.mat[i].append((j, value))
 
     def submatrix2(self, keys):
@@ -165,6 +165,7 @@ class LILMatrix(object):
                  outMat[i][ind] = (j - clo, val)
         A = LILMatrix.zeros((outRows, outCols))
         A.mat = outMat
+        A.type = self.type
         return A
 
     def submatrix(self, keys):
@@ -357,7 +358,7 @@ class LILMatrix(object):
                     A.row_swap(j, rlist[0])
                     rlist.pop(0)
                 else:
-                    return A
+                    continue
             for i in rlist:
                 A.row_add(i, j, - A[i, j] / A[j, j])
         return A
