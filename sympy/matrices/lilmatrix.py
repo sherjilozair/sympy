@@ -362,7 +362,7 @@ class LILMatrix(object):
             for i in rlist:
                 A.row_add(i, j, - A[i, j] / A[j, j])
         return A
-
+    
     def rref2(self):
         pivot, r = 0, self[:,:]
         pivotlist = []
@@ -397,7 +397,6 @@ class LILMatrix(object):
                     rlist.pop(0)
                 else:
                     continue
-            print j, A[j, j]
             A.row_scale(j, self.type(1) /  A[j, j])
             for i in A.nz_col(j):
                 if i != j:

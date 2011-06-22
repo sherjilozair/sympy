@@ -4,6 +4,8 @@ from sympy.core.sympify import sympify, converter, SympifyError
 from sympy.functions.elementary.miscellaneous import sqrt
 from sympy.core.cache import cacheit
 
+from sympy.core.numbers import nan, oo
+
 from sympy.polys import Poly, roots, cancel
 from sympy.simplify import simplify as sympy_simplify
 from sympy.utilities import any, all
@@ -740,16 +742,38 @@ class DOKMatrix(object):
         Y = L._lower_triangular_solve(rhs)
         X = L.T._upper_triangular_solve(Y)
         return X
-        
+
+    def LDL_solve(self, rhs):
+        if not self.is_square():
+            raise Exception("Make a square matrix exception")
+        if not self.rows == rhs.rows:
+            raise Exception
+        if not self.is_symmetric():
+            self = self.T * self
+            rhs = self.T * rhs
+        X = self._LDL_solve(rhs)
+        if X.has(nan) or X.has(oo): # import this
+            raise Exception
+        return X
+
     def _LDL_solve(self, rhs):
-        L, D = self._LDL()
+        L, D = self._LDL_sparse()
         z = L._lower_triangular_solve(rhs)
         y = D._diagonal_solve(z)
         x = L.T._upper_triangular_solve(y)
         return x
 
+    def is_symmetric(self):
+        return all(self[i, j] == self[j, i] for i, j in self.mat.keys())
+
+    def is_square(self):
+        return self.rows == self.cols
+    
     def inv_cholesky(self):
-        pass
+        I = self.eye(self.rows)
+
+    def has(self, expr):
+        any(self[i, j].has(expr) for i, j in self.mat.keys())
 
     def det(self, method="LDL"):
         if method == "CH":
@@ -997,7 +1021,7 @@ def transformation_matrix(f, A, B):
     if isinstance(f, (Matrix, DOKMatrix)):
         C = f
         f = lambda x: C*x
-    return vecs2matrix([B._LDL_solve(f(A[:,i])) for i in xrange(A.cols)])
+    return vecs2matrix([B.LDL_solve(f(A[:,i])) for i in xrange(A.cols)])
 
 def mat(n, d):
     A = randInvDOKMatrix(n, d)
