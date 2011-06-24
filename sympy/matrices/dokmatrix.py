@@ -17,8 +17,6 @@ import random
 
 from sympy.polys import EX, QQ, RR, ZZ
 
-import copy
-
 class DOKMatrix(object):
     """Sparse matrix"""
     def __init__(self, *args, **kwargs):
@@ -573,7 +571,7 @@ class DOKMatrix(object):
 
     def row_structure_symbolic_cholesky(self):
         R, parent = self.liupc()
-        Lrow = copy.deepcopy(R)
+        Lrow = R[:, :]
         for k in xrange(self.rows):
             for _, j in R[k]:
                 while j and j != k:
