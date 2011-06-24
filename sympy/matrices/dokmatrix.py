@@ -554,6 +554,7 @@ class DOKMatrix(object):
                 if r != j:
                     parent[r] = j
         return parent
+
     def liupc(self):
         R = self._lower_row_nonzero_structure()
         parent = [None] * self.rows
