@@ -571,12 +571,13 @@ class DOKMatrix(object):
         return R, parent
 
     def row_structure_symbolic_cholesky(self):
+        from copy import deepcopy
         R, parent = self.liupc()
-        Lrow = R[:, :]
+        Lrow = deepcopy(R)
         for k in xrange(self.rows):
             for _, j in R[k]:
-                while j and j != k:
-                    if (k, j) not in Lrow[k]:
+                while j != k:
+                    if  j and (k, j) not in Lrow[k]:
                         Lrow[k].append((k, j))
                         Lrow[k].sort()
                     j = parent[j]
@@ -595,15 +596,18 @@ class DOKMatrix(object):
     def fast_symbolic_cholesky(self): 
         """ implement algorithm 1.3 from 10.1.1.163.7506 """
         C = self._lower_columnar_nonzero_structure()
+        p=[]
         for k, col in enumerate(C):
             if len(C[k]) > 1:
                 parent = C[k][1][0]
+                p.append(parent)
             else:
                 continue
             for i, _ in col[1:]: # add (parent[j], j) to C
                 if (i, parent) not in C[parent]:
                     C[parent].append((i, parent))
                     C[parent].sort()
+        print p
         return C
 
     def _cholesky(self):
