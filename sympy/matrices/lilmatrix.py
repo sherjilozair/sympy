@@ -362,6 +362,22 @@ class LILMatrix(object):
             for i in rlist:
                 A.row_add(i, j, - A[i, j] / A[j, j])
         return A
+
+    def _upper_triangular_solve(self, rhs):
+        X = LILMatrix.zeros((rhs.rows, 1))
+        for i in reversed(xrange(self.rows)):
+            X[i, 0] = (rhs[i, 0] - sum(value * X[j, 0] for j, value in self.mat[i])) / self[i, i]
+        return X
+
+    def solve(self, rhs):
+        big = self.join_rows(rhs)
+        ref = big.gauss_col()
+        U, b = ref[:, :self.cols], ref[:, self.cols:]
+        return U._upper_triangular_solve(b)   
+
+    def __mul__(self, other):
+        prod = self.toMatrix() * other.toMatrix()
+        return LILMatrix(prod.rows, prod.cols, lambda i, j: prod[i, j]) 
     
     def rref2(self):
         pivot, r = 0, self[:,:]
