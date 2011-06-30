@@ -127,13 +127,13 @@ class LILMatrix(object):
         for ind, (j2, val) in enumerate(self.mat[i]):
             if j2 >= j:
                 if j2 == j:
-                    if value == self.tyep(0):
+                    if value == 0:
                         self.mat[i].pop(ind)
                     else:
                         self.mat[i][ind] = (j, value)
                     return
                 else:
-                    if value != self.type(0):
+                    if value != 0:
                         self.mat[i].insert(ind, (j, value))
                     return
         if value != self.type(0):
@@ -203,30 +203,11 @@ class LILMatrix(object):
         raise NotImplemented
 
     def row_add(self, r1, r2, alpha):
-        "row1 = row1 + alpha * row2 "
         if r1 == r2:
             return
         row1 = self.mat[r1]
         row2 = self.mat[r2]
-        li = []
-        i1 = i2 = 0
-        n1 = len(row1)
-        n2 = len(row2)
-        while i1 < n1 or i2 < n2:
-            # print i1, i2, len(row1), len(row2)
-            if i1 < n1 and (i2 >= n2 or row1[i1][0] < row2[i2][0]):
-                li.append(row1[i1])
-                i1 += 1
-            elif i1 >= n1 or row1[i1][0] > row2[i2][0]:
-                li.append((row2[i2][0], alpha * row2[i2][1]))
-                i2 += 1
-            else:
-                val = row1[i1][1] + alpha * row2[i2][1]
-                if val != self.type(0):
-                    li.append((row1[i1][0], val))
-                i1 += 1
-                i2 += 1
-        self.mat[r1] = li
+        self.mat[r1] = _row_add(row1, row2, alpha)
 
     def row_scale(self, r, alpha):
         for ind, (j, val) in enumerate(self.mat[r]):
@@ -369,16 +350,56 @@ class LILMatrix(object):
             X[i, 0] = (rhs[i, 0] - sum(value * X[j, 0] for j, value in self.mat[i])) / self[i, i]
         return X
 
-    def solve(self, rhs):
+    def solve_gauss(self, rhs):
         big = self.join_rows(rhs)
         ref = big.gauss_col()
         U, b = ref[:, :self.cols], ref[:, self.cols:]
-        return U._upper_triangular_solve(b)   
+        return U._upper_triangular_solve(b)
+
+    def solve_rref(self, rhs):
+        big = self.join_rows(rhs)
+        rref = big.rref()
+        return rref[:, self.cols]
+
+    def solve(self, rhs, method="GE"):
+        if method == "GE":
+            return self.solve_gauss(rhs)
+        elif method == "RREF":
+            return self.solve_rref(rhs)
+        else:
+            raise ValueError('Unrecognised method')
 
     def __mul__(self, other):
-        prod = self.toMatrix() * other.toMatrix()
-        return LILMatrix(prod.rows, prod.cols, lambda i, j: prod[i, j]) 
-    
+        if isinstance(other, LILMatrix):
+            prod = self.toDOKMatrix() * other.toDOKMatrix()
+            return LILMatrix(prod.rows, prod.cols, lambda i, j: prod[i, j]) 
+        else:
+            return scalar_product(self, other)
+
+    def __rmul__(self, other):
+        ## assume other is scalar
+        return self.__mul__(other)
+
+    def __sub__(self, other):
+        return self + (-1 * other)
+
+    def det(self):
+        if not self.is_square():
+            raise Exception
+        ref = self.gauss_col()
+        det = 1
+        for i in xrange(ref.rows):
+            det *= ref[i, i]
+        return det
+        
+    def toDOKMatrix(self):
+        from sympy import DOKMatrix
+        Mat = DOKMatrix(self.rows, self.cols, {})
+        for i in xrange(self.rows):
+            for j, value in self.mat[i]:
+                Mat[i, j] = value
+        return Mat
+
     def rref2(self):
         pivot, r = 0, self[:,:]
         pivotlist = []
@@ -467,9 +488,123 @@ class LILMatrix(object):
         aug = self.join_rows(LILMatrix.eye(self.rows, one = self.type(1), zero = self.type(0)))
         reduced = aug.rref()
         return reduced[:,self.rows:]
+
+    def clone(self):
+        return LILMatrix(self.rows, self.cols, lambda i, j: self[i, j])
         
-        
-        
+    def __add__(self, other):
+        if not isinstance(other, LILMatrix):
+            if self.is_square():
+                other = other * LILMatrix.eye(self.rows)
+            else:
+                raise Exception
+        add = self.clone()
+        for i in xrange(self.rows):
+            add.mat[i] = _row_add(self.mat[i], other.mat[i], 1)
+        return add
+
+    def is_square(self):
+        return self.rows == self.cols
+
+    def transpose(self):
+        T = LILMatrix.zeros(self.rows)
+        for i in xrange(self.rows):
+            for j, value in self.mat[i]:
+                T.mat[j].append((i, value))
+        return T
+
+    @property
+    def shape(self):
+        return (self.rows, self.cols)
+    
+    def __eq__(self, other):
+        if not self.shape == other.shape:
+            return False
+        return all(self.mat[i][ind] == other.mat[i][ind] for i in xrange(self.rows) for ind in xrange(len(self.mat[i]))) 
+
+    def __ne__(self, other):
+        if not self.shape == other.shape:
+            return True
+        return any(self.mat[i][ind] != other.mat[i][ind] for i in xrange(self.rows) for ind in xrange(len(self.mat[i]))) 
+
+    def doolittle(self):
+        A = self.clone()
+        n = A.rows
+        for i in xrange(n):
+            for j in xrange(i):
+                a = A[i, j]
+                for p in xrange(j):
+                    a -= A[i, p] * A[p, j]
+                A[i, j] = a / A[j, j]
+            for j in xrange(i, n):
+                a = A[i, j]
+                for p in xrange(i):
+                    a -= A[i, p] * A[p, j]
+                A[i, j] = a
+        return A
+
+    def LU_sparse(self):
+        row_swaps = []
+        A = self.clone()
+        n = self.rows
+        for k in xrange(n):
+            rlist = A.nz_col_lower(k)
+            if self[k, k] == 0:
+                if not rlist:
+                    print k
+                    raise Exception('Singular')
+                A.row_swap(k, rlist[0])
+                row_swaps.append((k, rlist[0]))
+                rlist.pop(0)
+            assert A[k, k]
+            for i in rlist:
+                A[i, k] /= A[k, k]
+            for j, val in self.mat[k]:
+                if j <= k:
+                    continue
+                for i in A.nz_col_lower(k):
+                    A[i, j] -= A[i, k] * val
+        L = LILMatrix.eye(self.rows)
+        for i in xrange(L.rows):
+            for j in xrange(i):
+                L[i, j] = A[i, j]
+        U = LILMatrix.zeros(self.rows)
+        for i in xrange(U.rows):
+            for j in xrange(i, U.rows):
+                U[i, j] = A[i, j]
+        return L, U, row_swaps
+            
+            
+            
+                
+def _row_add(row1, row2, alpha):
+    "li = row1 + alpha * row2 "
+    li = []
+    i1 = i2 = 0
+    n1 = len(row1)
+    n2 = len(row2)
+    while i1 < n1 or i2 < n2:
+        # print i1, i2, len(row1), len(row2)
+        if i1 < n1 and (i2 >= n2 or row1[i1][0] < row2[i2][0]):
+            li.append(row1[i1])
+            i1 += 1
+        elif i1 >= n1 or row1[i1][0] > row2[i2][0]:
+            li.append((row2[i2][0], alpha * row2[i2][1]))
+            i2 += 1
+        else:
+            val = row1[i1][1] + alpha * row2[i2][1]
+            if val != 0:
+                li.append((row1[i1][0], val))
+            i1 += 1
+            i2 += 1
+    return li   
+
+def scalar_product(self, scalar):
+    prod = self.clone()
+    for i in xrange(self.rows):
+        for ind, (j, value) in enumerate(self.mat[i]):
+            prod.mat[i][ind] = (j, scalar * value)
+    return prod
 
 def randInvLILMatrix(n, d, min=-5, max=10):
     A = LILMatrix(n, n, lambda i, j: random.randint(min, max) if abs(i - j) <= d-1 else 0)
