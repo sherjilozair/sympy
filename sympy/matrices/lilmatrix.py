@@ -350,6 +350,18 @@ class LILMatrix(object):
             X[i, 0] = (rhs[i, 0] - sum(value * X[j, 0] for j, value in self.mat[i])) / self[i, i]
         return X
 
+    def _lower_triangular_solve(self, rhs):
+        X = LILMatrix.zeros((rhs.rows, 1))
+        for i in xrange(self.rows):
+            X[i, 0] = (rhs[i, 0] - sum(value * X[j, 0] for j, value in self.mat[i])) / self[i, i]
+        return X
+
+    def LUsolve(self, rhs):
+        L, U, p = self.LU_sparse()
+        rhs.permute(p)
+        Y = L._lower_triangular_solve(rhs)
+        return U._upper_triangular_solve(Y)
+
     def solve_gauss(self, rhs):
         big = self.join_rows(rhs)
         ref = big.gauss_col()
@@ -548,7 +560,10 @@ class LILMatrix(object):
         A = self.clone()
         n = self.rows
         for k in xrange(n):
+
             rlist = A.nz_col_lower(k)
+
+            # Pivoting
             if self[k, k] == 0:
                 if not rlist:
                     print k
@@ -557,13 +572,17 @@ class LILMatrix(object):
                 row_swaps.append((k, rlist[0]))
                 rlist.pop(0)
             assert A[k, k]
+
+            # Algorithm
             for i in rlist:
                 A[i, k] /= A[k, k]
-            for j, val in self.mat[k]:
+
+            for j, val in A.mat[k]:
                 if j <= k:
                     continue
-                for i in A.nz_col_lower(k):
+                for i in rlist:
                     A[i, j] -= A[i, k] * val
+    
         L = LILMatrix.eye(self.rows)
         for i in xrange(L.rows):
             for j in xrange(i):
@@ -573,7 +592,11 @@ class LILMatrix(object):
             for j in xrange(i, U.rows):
                 U[i, j] = A[i, j]
         return L, U, row_swaps
-            
+
+    def permute(self, row_swaps):
+        for r1, r2 in row_swaps:
+            self.row_swap(r1, r2)
+        
             
             
                 
