@@ -332,17 +332,19 @@ class LILMatrix(object):
     def gauss_col(self):
         "Gaussian elimnation, currently tested only on square matrices"
         A = self[:, :]
+        row_swaps = []
         for j in xrange(A.rows):
             rlist = A.nz_col_lower(j)
             if A[j, j] == self.type(0):
                 if rlist:
                     A.row_swap(j, rlist[0])
+                    row_swaps.append((j, rlist[0]))
                     rlist.pop(0)
                 else:
                     continue
             for i in rlist:
                 A.row_add(i, j, - A[i, j] / A[j, j])
-        return A
+        return A, row_swaps
 
     def _upper_triangular_solve(self, rhs):
         X = LILMatrix.zeros((rhs.rows, 1))
@@ -358,14 +360,15 @@ class LILMatrix(object):
 
     def LUsolve(self, rhs):
         L, U, p = self.LU_sparse()
-        rhs.permute(p)
-        Y = L._lower_triangular_solve(rhs)
+        b = rhs[:,:]
+        b.permute(p)
+        Y = L._lower_triangular_solve(b)
         return U._upper_triangular_solve(Y)
 
     def solve_gauss(self, rhs):
-        big = self.join_rows(rhs)
-        ref = big.gauss_col()
-        U, b = ref[:, :self.cols], ref[:, self.cols:]
+        U, p = self.gauss_col()
+        b = rhs.clone()
+        b.permute(p)
         return U._upper_triangular_solve(b)
 
     def solve_rref(self, rhs):
@@ -398,10 +401,12 @@ class LILMatrix(object):
     def det(self):
         if not self.is_square():
             raise Exception
-        ref = self.gauss_col()
+        ref, p = self.gauss_col()
         det = 1
         for i in xrange(ref.rows):
             det *= ref[i, i]
+        if len(p) % 2 == 1:
+            det *= -1
         return det
         
     def toDOKMatrix(self):
@@ -564,14 +569,13 @@ class LILMatrix(object):
             rlist = A.nz_col_lower(k)
 
             # Pivoting
-            if self[k, k] == 0:
+            if A[k, k] == 0:
                 if not rlist:
-                    print k
                     raise Exception('Singular')
                 A.row_swap(k, rlist[0])
                 row_swaps.append((k, rlist[0]))
                 rlist.pop(0)
-            assert A[k, k]
+            assert A[k, k] != 0
 
             # Algorithm
             for i in rlist:
@@ -580,13 +584,15 @@ class LILMatrix(object):
             for j, val in A.mat[k]:
                 if j <= k:
                     continue
+                # j > k
                 for i in rlist:
-                    A[i, j] -= A[i, k] * val
+                    A[i, j] -= A[i, k] * val # i > k, j > k
     
         L = LILMatrix.eye(self.rows)
         for i in xrange(L.rows):
             for j in xrange(i):
                 L[i, j] = A[i, j]
+
         U = LILMatrix.zeros(self.rows)
         for i in xrange(U.rows):
             for j in xrange(i, U.rows):
@@ -636,9 +642,27 @@ def randInvLILMatrix(n, d, min=-5, max=10):
 def test(n, d):
     A = randInvLILMatrix(n, d)
     A.applyfunc(S)
-    B = A.gauss_col()
+    B, p = A.gauss_col()
     if not B.is_upper():
         return A, A.toMatrix().det()
+
+def testLU(n, d):
+    A = randInvLILMatrix(n, d)
+    A.applyfunc(S)
+    L, U, p = A.LU_sparse()
+    A.permute(p)
+    zero = A - L * U
+    if iszero(zero):
+        return testLU(n, d)
+    return A, L, U, A - L * U
+
+def testLU2(n, d):
+    A, L, U, Z = testLU(n, d)
+    L2, U2, P = A.toMatrix().LUdecomposition()
+    return A, A.toMatrix(), L, U, L2, U2
+    
+def iszero(A):
+    return all(len(i) == 0 for i in A.mat)
 
 def randLILMatrix(i, j, min=1, max=1, sparsity=0.5):
     return LILMatrix(i, j, lambda i, j: random.randint(min, max) if random.random() < sparsity else 0)
