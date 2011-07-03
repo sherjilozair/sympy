@@ -773,7 +773,7 @@ class DOKMatrix(object):
         return self.rows == self.cols
     
     def inv_cholesky(self):
-        I = self.eye(self.rows)
+        I = self.eye(self.rows) # TODO
 
     def has(self, expr):
         any(self[i, j].has(expr) for i, j in self.mat.keys())
@@ -870,6 +870,26 @@ class DOKMatrix(object):
             return cls(dims[0], dims[1], {})
         else:
             return cls(dims, dims, {})
+
+    @classmethod
+    def _from_dict(cls, rows, cols, dok):
+        return cls(rows, cols, dok)
+
+    def scalar_multiply(self, scalar):
+        mat = DOKMatrix(self.rows, self.cols, {})
+        for i in self.mat:
+            mat[i] = scalar * self[i]
+        return mat
+
+    def to_dokmatrix(self):
+        return self
+
+    def to_lilmatrix(self):
+        return LILMatrix._from_dict(self.rows, self.cols, self.mat)
+
+    def to_dense(self):
+        return Matrix(self.rows, self.cols, lambda i, j: self[i, j])
+
     def _lil_row_lower(A):
         return A._lil_lower(0)
 

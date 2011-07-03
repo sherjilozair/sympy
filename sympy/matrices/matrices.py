@@ -160,6 +160,13 @@ class Matrix(object):
         else:
             raise TypeError("Data type not understood")
 
+    @classmethod
+    def _from_dict(cls, rows, cols, dok):
+        mat = cls.zeros((rows, cols))
+        for i in dok:
+            mat[i] = dok[i]
+        return mat    
+    
     def key2ij(self,key):
         """Converts key=(4,6) to 4,6 and ensures the key is correct."""
         if not (ordered_iter(key) and len(key) == 2):
@@ -483,6 +490,9 @@ class Matrix(object):
         else:
             return True
 
+    def scalar_multiply(self, other):
+        return Matrix(self.rows, self.cols, lambda i, j: other * self[i, j])
+
     def __hash__(self):
         return super(Matrix, self).__hash__()
 
@@ -513,6 +523,15 @@ class Matrix(object):
 
     def __repr__(self):
         return sstr(self)
+
+    def to_dense(self):
+        return self
+
+    def to_dokmatrix(self):
+        return DOKMatrix(self.rows, self.cols, lambda i, j: self[i, j])
+
+    def to_lilmatrix(self):
+        return LILMatrix(self.rows, self.cols, lambda i, j: self[i, j])
 
     def cholesky(self):
         """
@@ -1335,7 +1354,8 @@ class Matrix(object):
             if Matrix(row_reduced[i*m:(i+1)*m]).norm() == 0:
                 rank -= 1
         if not rank == self.cols:
-            raise MatrixError("The rank of the matrix must match the columns")
+            raise MatrixError("The rank of the matrix must match the columns") 
+            # Singular Matrix exception.
         Q, R = self.zeros((n, m)), self.zeros(m)
         for j in range(m):      # for each column vector
             tmp = self[:,j]     # take original v
@@ -1557,12 +1577,14 @@ class Matrix(object):
             D[i, i] = C.exp(D[i, i])
         return U * D * U.inv()
 
-    def zeros(self, dims):
+    @classmethod
+    def zeros(cls, dims):
         """Returns a dims = (d1,d2) matrix of zeros."""
         n, m = _dims_to_nm( dims )
         return Matrix(n,m,[S.Zero]*n*m)
 
-    def eye(self, n):
+    @classmethod
+    def eye(cls, n):
         """Returns the identity matrix of size n."""
         tmp = self.zeros(n)
         for i in range(tmp.rows):
@@ -2849,8 +2871,7 @@ def a2idx(a):
     The result of a2idx() (if not None) can be safely used as an index to
     arrays/matrices.
     """
-    if hasattr(a, "__int__"):
-        return int(a)
+
     if hasattr(a, "__index__"):
         return a.__index__()
 

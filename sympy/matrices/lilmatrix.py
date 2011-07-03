@@ -69,13 +69,6 @@ class LILMatrix(object):
     def __repr__(self):
         return sstr(self.toMatrix())
 
-    def toMatrix(self):
-        mat = [[self.type(0)] * self.cols for i in xrange(self.rows)]
-        for i in xrange(self.rows):
-            for j, val in self.mat[i]:
-                mat[i][j] = val
-        return Matrix(mat)
-
     def slice2bounds(self, key, defmax):
         """
             Takes slice or number and returns (min,max) for iteration
@@ -227,6 +220,12 @@ class LILMatrix(object):
     def row_swap(self, r1, r2):
         self.mat[r1], self.mat[r2] = self.mat[r2], self.mat[r1]
 
+    @classmethod
+    def _from_dict(cls, rows, cols, dok):
+        mat = cls.zeros((rows, cols))
+        for i in dok:
+            mat[i] = dok[i]
+        return mat    
 
     @classmethod
     def zeros(cls, shape):
@@ -234,6 +233,20 @@ class LILMatrix(object):
             return cls(shape[0], shape[1], lambda i,j:0)
         else:
             return cls(shape, shape, lambda i, j: 0)
+
+    def to_dense(self):
+        return Matrix(self.rows, self.cols, lambda i, j: self[i, j])
+
+    def to_dokmatrix(self):
+        from sympy import DOKMatrix
+        mat = DOKMatrix(self.rows, self.cols, {})
+        for i in xrange(self.rows):
+            for j, value in self.mat[i]:
+                mat[i, j] = value
+        return mat
+
+    def to_lilmatrix(self):
+        return self
 
     def LUdecomposition_Simple(self, iszerofunc=_iszero):
         """
@@ -398,9 +411,7 @@ class LILMatrix(object):
     def __sub__(self, other):
         return self + (-1 * other)
 
-    def det(self):
-        if not self.is_square():
-            raise Exception
+    def det_gauss(self):
         ref, p = self.gauss_col()
         det = 1
         for i in xrange(ref.rows):
@@ -408,14 +419,23 @@ class LILMatrix(object):
         if len(p) % 2 == 1:
             det *= -1
         return det
-        
-    def toDOKMatrix(self):
-        from sympy import DOKMatrix
-        Mat = DOKMatrix(self.rows, self.cols, {})
-        for i in xrange(self.rows):
-            for j, value in self.mat[i]:
-                Mat[i, j] = value
-        return Mat
+
+    def det_LU(self):
+        L, U, p = self.LU_sparse()
+        det = 1
+        for i in xrange(U.rows):
+            det *= U[i, i]
+        if len(p) % 2 == 1:
+            det *= -1
+        return det
+
+    def det(self, method='GE'):
+        if method == "GE":
+            return self.det_gauss()
+        elif method == 'LU':
+            return self.det_LU()
+        else:
+            raise Exception
 
     def rref2(self):
         pivot, r = 0, self[:,:]
@@ -602,6 +622,13 @@ class LILMatrix(object):
     def permute(self, row_swaps):
         for r1, r2 in row_swaps:
             self.row_swap(r1, r2)
+
+    def scalar_multiply(self, scalar):
+        prod = self.clone()
+        for i in xrange(self.rows):
+            for ind, (j, value) in enumerate(self.mat[i]):
+                prod.mat[i][ind] = (j, scalar * value)
+        return prod
         
             
             
