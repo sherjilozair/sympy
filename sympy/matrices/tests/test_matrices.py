@@ -1,13 +1,7 @@
-<<<<<<< HEAD
 from sympy import (symbols, Matrix, SparseMatrix, eye, I, Symbol, Rational,
     Float, wronskian, cos, sin, exp, hessian, sqrt, zeros, ones, randMatrix,
     Poly, S, pi, E, I, oo, trigsimp, Integer, block_diag, N, zeros, sympify,
     Pow, simplify, Min, Max, Abs)
-=======
-from sympy import (symbols, Matrix, eye, I, Symbol, Rational, wronskian, cos,
-    sin, exp, hessian, sqrt, zeros, ones, randMatrix, Poly, S, pi, E,
-    oo, trigsimp, Integer, block_diag, N, zeros)
->>>>>>> 48a37af... Work on DOKMatrix
 from sympy.matrices.matrices import (ShapeError, MatrixError,
     matrix_multiply_elementwise, diag, NonSquareMatrixError, _dims_to_nm)
 from sympy.utilities.pytest import raises
