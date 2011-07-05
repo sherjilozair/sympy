@@ -42,7 +42,7 @@ class ExpressionDomain(Field, CharacteristicZero, SimpleDomain):
             return EX(f.ex.as_numer_denom()[1])
 
         def simplify(f, ex):
-            return f.__class__(ex.cancel())
+            return f.__class__(ex.cancel()) ## Sherjil's comments. cancel's a sympy.core function. Is it fast enough ? Is it reliable ?
 
         def __abs__(f):
             return f.__class__(abs(f.ex))

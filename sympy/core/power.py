@@ -76,9 +76,11 @@ class Pow(Expr):
         b = _sympify(b)
         e = _sympify(e)
         if evaluate:
+            if e == 0.5:
+                e = S.Half 
             if e is S.Zero:
                 return S.One
-            elif e is S.One:
+            elif e == S.One:
                 return b
             else:
                 obj = b._eval_power(e)
