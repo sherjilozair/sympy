@@ -5390,3 +5390,17 @@ def poly(expr, *gens, **args):
     opt = options.build_options(gens, args)
 
     return _poly(expr, opt)
+
+class Frac(Expr):
+    def __init__(self, expr):
+        if isinstance(expr, tuple):
+            self.p = Poly(expr[0])
+            self.q = Poly(expr[1])
+        elif expr.is_Mul:
+            self.p = Poly(expr.args[1])
+            self.q = Poly(expr.args[0].args[0])
+        
+
+    def __add__(self, other):
+        if isinstance(other, Frac):
+            return Frac((self.p * other.q + other.p * self.q, self.q * other.q))

@@ -1,7 +1,7 @@
 from __future__ import division
 from sympy import Basic, Symbol, Integer, C, S, Dummy, Rational, Add
 from sympy.core.sympify import sympify, converter, SympifyError
-
+from sympy.functions.elementary.miscellaneous import sqrt
 from sympy.core.cache import cacheit
 
 from sympy.polys import Poly, roots, cancel
@@ -82,7 +82,7 @@ class DOKMatrix(object):
             if isinstance(i, int) and isinstance(j, int):
                 if (i, j) in self.mat:
                     return self.mat[i, j]
-                elif 0 <= i < self.rows and 0 <= j < self.cols:
+                elif (0, 0) <= key < self.shape:
                     return 0
                 else:
                     raise IndexError
@@ -623,6 +623,39 @@ class DOKMatrix(object):
         # self._cache['cholesky'] = C
         return C
 
+    def _cholesky_sparse(self):
+        Crowstruc = self.row_structure_symbolic_cholesky()
+        C = DOKMatrix.zeros(self.rows)
+        for row in Crowstruc:
+            for i, j in row:
+                if i != j:
+                    C[i, j] = self[i, j]
+                    summ = 0
+                    for p1 in Crowstruc[i]:
+                        if p1[1] < j:
+                            for p2 in Crowstruc[j]:
+                                if p2[1] < j:
+                                    if p1[1] == p2[1]:
+                                        summ += C[p1] * C[p2]
+                                else:
+                                    break
+                            else:
+                                break
+                    C[i, j] -= summ
+                    C[i, j] /= C[j, j]
+                else:
+                    C[j, j] = self[j, j]
+                    summ = 0
+                    for _, k in Crowstruc[j]:
+                        if k < j:
+                            summ += C[j, k] ** 2
+                        else:
+                            break
+                    C[j, j] -= summ
+                    C[j, j] = C[j, j] ** 0.5
+        return C
+                    
+            
     def _LDL(self):
         # CHstruc = self.elementary_symbolic_cholesky()
         CHstruc = self.fast_symbolic_cholesky()
@@ -641,21 +674,21 @@ class DOKMatrix(object):
 
     
     def _LDL_sparse(self):
-        Lrow = self.row_structure_symbolic_cholesky()
+        Lrowstruc = self.row_structure_symbolic_cholesky()
         L = DOKMatrix.eye(self.rows)
         D = DOKMatrix(self.rows, self.cols, {})
         
-        for row in Lrow:
+        for row in Lrowstruc:
             for i, j in row:
                 if i != j:
                     L[i, j] = self[i, j]
                     summ = 0
-                    for p1 in Lrow[i]:
+                    for p1 in Lrowstruc[i]:
                         if p1[1] < j:
-                            for p2 in Lrow[j]:
+                            for p2 in Lrowstruc[j]:
                                 if p2[1] < j:
                                     if p1[1] == p2[1]:
-                                        summ += L[p1]*L[p2]*D[p1[1], p1[1]]
+                                        summ += L[p1] * L[p2] * D[p1[1], p1[1]]
                                 else:
                                     break
                         else:
@@ -665,7 +698,7 @@ class DOKMatrix(object):
                 elif i == j:
                     D[i, i] = self[i, i]
                     summ = 0
-                    for i, k in Lrow[i]:
+                    for _, k in Lrowstruc[i]:
                         if k < i:
                             summ += L[i, k]**2 * D[k, k]
                         else:
@@ -719,13 +752,19 @@ class DOKMatrix(object):
     def inv_cholesky(self):
         pass
 
-    def det(self, method="CH"):
+    def det(self, method="LDL"):
         if method == "CH":
-            L = (self.T * self)._cholesky()
+            L = (self.T * self)._cholesky_sparse()
             det = 1
             for i in xrange(L.rows):
                 det *= L[i,i]
             return det
+        elif method =="LDL":
+            _, D = (self.T * self)._LDL_sparse()
+            det = 1
+            for i in xrange(D.rows):
+                det *= D[i, i]
+            return sqrt(det) 
         else:
             raise Exception('No such method')
 
@@ -902,7 +941,36 @@ def test2(n, d):
     A._cholesky().toMatrix().nonzero(),
     S.nonzero())
            
-    
+def vecs2matrix(vecs):
+    """Join column vectors to a matrix."""
+    m = len(vecs[0])
+    n = len(vecs)
+    A = DOKMatrix.zeros((m, n))
+    for i in xrange(m):
+        for j in xrange(n):
+            A[i,j] = vecs[j][i,0]
+    return A
+
+def transformation_matrix(f, A, B):
+    """Return the transformation matrix representing the linear transformation f.
+
+    By definition this is a_{ij} in
+
+        f(v_j) == \sum a_{ij} w_i
+
+    where v_j are the base vectors in A and w_i the base vectors in B.
+
+    f is a linear mapping K^n -> K^m where K is a field. It can be a function
+    accepting a vector as argument or a matrix.
+    The transformation matrix is calculated for transformations from the vector
+    space represented by base A to the space represented by base B (each given
+    as a Matrix.)
+    """
+    if isinstance(f, (Matrix, DOKMatrix)):
+        C = f
+        f = lambda x: C*x
+    return vecs2matrix([B._LDL_solve(f(A[:,i])) for i in xrange(A.cols)])
+
 def mat(n, d):
     A = randInvDOKMatrix(n, d)
     return A.T * A 
