@@ -37,8 +37,8 @@ def _dict_to_lilmatrix(rows, cols, mat):
 
 def slice2bounds(self, key, defmax):
         """
-            Takes slice or number and returns (min,max) for iteration
-            Takes a default maxval to deal with the slice ':' which is (none, none)
+        Takes slice or number and returns (min,max) for iteration
+        Takes a default maxval to deal with the slice ':' which is (none, none)
         """
         if isinstance(key, slice):
             lo, hi = 0, defmax
@@ -60,4 +60,21 @@ def slice2bounds(self, key, defmax):
                 return defmax+key, defmax+key+1
         else:
             raise IndexError("Improper index type")
+
+def vecs2matrix(vecs, repr='dense'):
+    """Join column vectors to a matrix."""
+    m = len(vecs[0])
+    n = len(vecs)
+    if repr == 'dok':
+        A = DOKMatrix.zeros((m, n))
+    elif repr == 'lil':
+        A = LILMatrix.zeros((m, n))
+    elif repr == 'dense':
+        A = Matrix.zeros((m, n))
+    else:
+        raise Exception('repr not recognized')
+    for i in xrange(m):
+        for j in xrange(n):
+            A[i,j] = vecs[j][i,0]
+    return A
 

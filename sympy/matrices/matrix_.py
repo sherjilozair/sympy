@@ -2,7 +2,10 @@ from sympy.matrices.matrices import Matrix
 from sympy.matrices.dokmatrix import DOKMatrix
 from sympy.matrices.lilmatrix import LILMatrix
 
-from sympy.matrices.matrixutils import _from_callable, _from_list, _dict_to_densematrix, _dict_to_dokmatrix, _dict_to_lilmatrix
+from sympy.matrices.matrixutils import (
+_from_callable, _from_list, _dict_to_densematrix, 
+_dict_to_dokmatrix, _dict_to_lilmatrix
+)
 
 # This is a high-level class.
 # TODO: Make the internals low-level.
@@ -51,6 +54,16 @@ class Matrix_(object):
             # Matrix_(InternalMatrix) would work and efficiently.
             if isinstance(args[0], (DOKMatrix, LILMatrix, Matrix)):
                 mat = args[0]
+                if 'repr' in kwargs:
+                    if kwargs['repr'] == 'dok':
+                        mat = mat.to_dokmatrix()
+                    elif kwargs['repr'] == 'lil':
+                        mat = mat.to_lilmatrix()
+                    elif kwargs['repr'] == 'dense':
+                        mat = mat.to_densematrix()
+                    else:
+                        raise Exception('repr %s not recognized' % kwargs['repr'])
+                    
             else:
                 raise TypeError('Data type not understood')
         # Put the internal matrix as self.mat
@@ -60,7 +73,6 @@ class Matrix_(object):
     # # # # # # # # # # #       
     # Element accessors #
     # # # # # # # # # # #
-      
     
     def __setitem__(self, key, value):
         """
@@ -162,15 +174,30 @@ class Matrix_(object):
         # Where to put __eq__ methods. 
         # Matrix_ or the internals or both ?
         # Code duplication is fine ?
-        pass
+        if not isinstance(other, Matrix_):
+            return False
+        if type(self.mat) == type(other.mat):
+            return self.mat == other.mat
+        # If type is not same.
+        if self.mat.shape != other.mat.shape:
+            return False
+        return all(self.mat[i, j] == other.mat[i, j]
+            for i in xrange(self.rows) for j in xrange(self.cols))
         
 
     def __ne__(self, other):
-        pass
+        if not isinstance(other, Matrix_):
+            return True
+        if type(self.mat) == type(other.mat):
+            return self.mat != other.mat
+        # If type is not same.
+        if self.mat.shape != other.mat.shape:
+            return True
+        return any(self.mat[i, j] != other.mat[i, j]
+            for i in xrange(self.rows) for j in xrange(self.cols))
 
     def __neg__(self):
         return self * (-1)
-        
 
     def __add__(self, other):
         # if either is dense, the other will be converted to dense.
@@ -182,14 +209,14 @@ class Matrix_(object):
                 # Make a ShapeError Exception
             if isinstance(self.mat, Matrix) or isinstance(other.mat, Matrix):
                 # If either is dense
-                return Matrix_(self.mat.to_dense() + other.mat.to_dense())
+                return Matrix_(self.mat.to_densematrix() + other.mat.to_densematrix())
             # Convert internals to dok and add
             return Matrix_(self.mat.to_dokmatrix() + other.mat.to_dokmatrix())
         # `matrix + scalar` not supported
         return NotImplemented
 
     __radd__ = __add__
-        
+
     def __sub__(self, other):
         '''
         Subtraction of Matrices.
@@ -200,7 +227,7 @@ class Matrix_(object):
             # If other is a Matrix_ (not a scalar)
             if isinstance(self.mat, Matrix) or isinstance(other.mat, Matrix):
                 # If either is dense
-                return Matrix_(self.mat.to_dense() - other.mat.to_dense())
+                return Matrix_(self.mat.to_densematrix() - other.mat.to_densematrix())
             # Convert internals to dok and subtract
             return Matrix_(self.mat.to_dokmatrix() - other.mat.to_dokmatrix())
         # `matrix - scalar` not supported
@@ -218,7 +245,7 @@ class Matrix_(object):
                 raise ValueError('Given matrices cannot be multiplied')
             if isinstance(self.mat, Matrix) or isinstance(other.mat, Matrix):
                 # If either is dense
-                return Matrix_(self.mat.to_dense() * other.mat.to_dense())
+                return Matrix_(self.mat.to_densematrix() * other.mat.to_densematrix())
             # Convert internals to dok and multiply
             return Matrix_(self.mat.to_dokmatrix() * other.mat.to_dokmatrix())
         # Scalar multiplication
@@ -252,7 +279,7 @@ class Matrix_(object):
         if not self.is_square():
             raise ValueError('Matrix should be square.')
         if isinstance(self.mat, Matrix) or method == 'bareis' or method == 'berkowitz':
-            return self.mat.to_dense().det(method=method)
+            return self.mat.to_densematrix().det(method=method)
         return self.mat.to_lilmatrix().det(method=method)
 
     def solve(self, rhs, method=None):
@@ -268,32 +295,34 @@ class Matrix_(object):
         
         if method == 'CH':
             if isinsntance(self.mat, Matrix):
-                return Matrix_(self.mat.cholesky_solve(rhs.mat.to_dense()))
+                return Matrix_(self.mat.cholesky_solve(rhs.mat.to_densematrix()))
             return Matrix_(self.mat.to_dokmatrix().cholesky_solve(rhs.mat.to_dokmatrix()))
 
         if method == 'QR':
-            return Matrix_(self.mat.to_dense().QRsolve(rhs.mat.to_dense()))
+            return Matrix_(self.mat.to_densematrix().QRsolve(rhs.mat.to_densematrix()))
 
         if method == 'LU':
             if isinsntance(self.mat, Matrix):
-                return Matrix_(self.mat.LUsolve(rhs.mat.to_dense()))
+                return Matrix_(self.mat.LUsolve(rhs.mat.to_densematrix()))
             return Matrix_(self.mat.to_lilmatrix().LUsolve(rhs.mat.to_lilmatrix()))
 
         if not method:
             return Matrix_(self.mat.solve(rhs.mat))
 
         raise Exception('method not recognized')
-            
 
     def inv(self, method=None):
         # All three matrices provide inverse
         # FIXME: Redo this !
         # TODO: Write Matrix.inverse_cholesky and DOKMatrix.inverse_cholesky
 
+        # Written Matrix(DOKMatrix).inverse_CH(LDL)
+        # TODO: Add logic for it here.
+
         if not self.is_square():
             raise ValueError('ShapeError') # ShapeError
 
-        if isinstance(self.mat, Matrix):
+        if isinstance(self.mat, Matrix) and method in ('LU', 'GE', 'ADJ', 'CH', 'LDL'):
             return Matrix_(self.mat.inv(method=method))
 
         if method == 'CH':
@@ -303,14 +332,13 @@ class Matrix_(object):
         
         if method == 'GE':
             if isinsntance(self.mat, Matrix):
-                return Matrix_(self.mat.LUsolve(rhs.mat.to_dense()))
+                return Matrix_(self.mat.inv(rhs.mat.to_densematrix()))
             return Matrix_(self.mat.to_lilmatrix().LUsolve(rhs.mat.to_lilmatrix()))
 
         if not method:
             return Matrix_(self.mat.solve(rhs.mat))
 
         raise Exception('method not recognized')
-        
 
     def rref(self):
         # DOK would be converted to LIL for this.
@@ -368,13 +396,23 @@ class Matrix_(object):
             if self.rows < self.cols:
                 raise Exception('Matrix cannot be QR factorized')
             try:
-                Q, R = self.mat.to_dense().QRdecomposition()
+                Q, R = self.mat.to_densematrix().QRdecomposition()
             except SingularMatrixException:
                 raise Exception('Matrix cannot be QR factorized')
             else:
                 return Matrix_(Q), Matrix_(R)
+
+        if method == 'LUFF':
+            try:
+                P, L, D, U = self.mat.to_densematrix().LUdecompositionFF()
+            except SingularMatrixException:
+                raise Exception('''Matrix cannot be factorized by the
+                    fraction-free gaussian elimination method''')
+            else:
+                return Matrix_(P), Matrix_(L), Matrix_(D), Matrix_(U)
             
-            
+        # Have I put in all the factorizations ?
+
     # # # # # # # # # # # # 
     # Utility functions   #
     # # # # # # # # # # # #
@@ -385,8 +423,8 @@ class Matrix_(object):
     def __repr__(self):
         return self.mat.__str__()
 
-    def clone(self):
-        return Matrix_(self.mat.clone())
+    def copy(self):
+        return Matrix_(self.mat.copy())
 
     # # # # # # # # # # # # # 
     # .is_something methods #
@@ -403,4 +441,21 @@ class Matrix_(object):
 
     def is_square(self):
         return self.mat.is_square()
+
+    # # # # # # # # # # # # # # # # #
+    # Repr interconversion methods  #
+    # # # # # # # # # # # # # # # # #
+
+    def to_densematrix(self):
+        return Matrix_(self.mat.to_densematrix())
+
+    def to_dokmatrix(self):
+        return Matrix_(self.mat.to_dokmatrix())
+
+    def to_lilmatrix(self):
+        return Matrix_(self.mat.to_lilmatrix())
+
+def randMatrix_(n, m, max=10, min=-10, repr='dok'):
+    from randmatrix import randMatrix
+    return Matrix_(randMatrix(n, m, max=max, min=min))
 

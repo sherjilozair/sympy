@@ -524,10 +524,11 @@ class Matrix(object):
     def __repr__(self):
         return sstr(self)
 
-    def to_dense(self):
+    def to_densematrix(self):
         return self
 
     def to_dokmatrix(self):
+        from sympy.matrices import DOKMatrix
         return DOKMatrix(self.rows, self.cols, lambda i, j: self[i, j])
 
     def to_lilmatrix(self):
@@ -728,12 +729,14 @@ class Matrix(object):
         Z = D._diagonal_solve(Y)
         return (L.T)._upper_triangular_solve(Z)
 
-    def inv(self, method="GE", iszerofunc=_iszero, try_block_diag=False):
+    def inv(self, method=None, iszerofunc=_iszero, try_block_diag=False):
         """
         Calculates the matrix inverse.
 
         According to the "method" parameter, it calls the appropriate method:
 
+          CH .... inverse_CH()
+          LDL ... inverse_LDL()
           GE .... inverse_GE()
           LU .... inverse_LU()
           ADJ ... inverse_ADJ()
@@ -749,6 +752,8 @@ class Matrix(object):
         should return True if its argument is zero.
 
         """
+        if not method:
+            method = 'GE'
         if not self.is_square:
             raise NonSquareMatrixError()
         if try_block_diag:
@@ -763,6 +768,10 @@ class Matrix(object):
             return self.inverse_LU(iszerofunc=iszerofunc)
         elif method == "ADJ":
             return self.inverse_ADJ()
+        elif method == "LDL":
+            return self.inverse_LDL()
+        elif method == "CH":
+            return self.inverse_CH()
         else:
             raise ValueError("Inversion method unrecognized")
 
@@ -1586,12 +1595,11 @@ class Matrix(object):
     @classmethod
     def eye(cls, n):
         """Returns the identity matrix of size n."""
-        tmp = self.zeros(n)
+        tmp = cls.zeros(n)
         for i in range(tmp.rows):
             tmp[i,i] = S.One
         return tmp
 
-    @property
     def is_square(self):
         return self.rows == self.cols
 
@@ -1842,7 +1850,7 @@ class Matrix(object):
                     return False
         return True
 
-    def clone(self):
+    def copy(self):
         return Matrix(self.rows, self.cols, lambda i, j: self[i, j])
 
     def det(self, method="bareis"):
@@ -1959,6 +1967,24 @@ class Matrix(object):
             raise ValueError("A Matrix must have non-zero determinant to invert.")
 
         return self.adjugate()/d
+
+    def inverse_solver(self, solver=None):
+        from matrixutils import vecs2matrix
+        if not solver or solver == 'CH':
+            solver = self.cholesky_solve
+        elif solver == 'LDL':
+            solver = self.LDLsolve
+        else:
+            raise Exception('solver method not recognized')
+        I = Matrix.eye(self.rows)
+        return vecs2matrix([solver(I[:, i])
+            for i in xrange(self.cols)], repr='dense')
+
+    def inverse_CH(self):
+        return self.inverse_solver(solver = 'CH')
+
+    def inverse_LDL(self):
+        return self.inverse_solver(solver = 'LDL')
 
     def rref(self,simplified=False, iszerofunc=_iszero, simplify=sympy_simplify):
         """

@@ -13,4 +13,4 @@ from dokmatrix import *
 
 from lilmatrix import *
 
-from matrix_ import Matrix_
+from matrix_ import Matrix_, randMatrix_

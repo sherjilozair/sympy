@@ -1,9 +1,9 @@
 from __future__ import division
 import random
-from sympy.matrices import Matrix
+from sympy.matrices.matrices import Matrix
 from sympy.printing import sstr, pretty
 from sympy.simplify.simplify import simplify as sympy_simplify
-from sympy import S
+from sympy.core.singleton import S
 
 def _iszero(x):
     return x == 0
@@ -64,10 +64,10 @@ class LILMatrix(object):
                         self.mat[i].append((j, value))
 
     def __str__(self):
-        return sstr(self.toMatrix())
+        return sstr(self.to_densematrix())
 
     def __repr__(self):
-        return sstr(self.toMatrix())
+        return sstr(self.to_densematrix())
 
     def slice2bounds(self, key, defmax):
         """
@@ -234,7 +234,7 @@ class LILMatrix(object):
         else:
             return cls(shape, shape, lambda i, j: 0)
 
-    def to_dense(self):
+    def to_densematrix(self):
         return Matrix(self.rows, self.cols, lambda i, j: self[i, j])
 
     def to_dokmatrix(self):
@@ -526,7 +526,7 @@ class LILMatrix(object):
         reduced = aug.rref()
         return reduced[:,self.rows:]
 
-    def clone(self):
+    def copy(self):
         return LILMatrix(self.rows, self.cols, lambda i, j: self[i, j])
         
     def __add__(self, other):

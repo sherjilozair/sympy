@@ -414,7 +414,6 @@ class DOKMatrix(object):
                     %repr(key))
         i,j=key
         if not (i>=0 and i<self.rows and j>=0 and j < self.cols):
-            print self.rows, " ", self.cols
             raise IndexError("Index out of range: a[%s]"%repr(key))
         return i,j
 
@@ -607,7 +606,6 @@ class DOKMatrix(object):
                 if (i, parent) not in C[parent]:
                     C[parent].append((i, parent))
                     C[parent].sort()
-        print p
         return C
 
     def _cholesky(self):
@@ -752,14 +750,17 @@ class DOKMatrix(object):
         if not self.rows == rhs.rows:
             raise Exception
         if not self.is_symmetric():
-            self = self.T * self
             rhs = self.T * rhs
-        X = self._LDL_solve(rhs)
-        if X.has(nan) or X.has(oo): # import this
+            self = self.T * self
+        L, D = self._LDL_sparse()
+        z = L._lower_triangular_solve(rhs)
+        y = D._diagonal_solve(z)
+        x = L.T._upper_triangular_solve(y)
+        if x.has(nan) or x.has(oo): # import this
             raise Exception
-        return X
+        return x
 
-    def _LDL_solve(self, rhs):
+    def _LDLsolve(self, rhs):
         L, D = self._LDL_sparse()
         z = L._lower_triangular_solve(rhs)
         y = D._diagonal_solve(z)
@@ -771,9 +772,6 @@ class DOKMatrix(object):
 
     def is_square(self):
         return self.rows == self.cols
-    
-    def inv_cholesky(self):
-        I = self.eye(self.rows) # TODO
 
     def has(self, expr):
         any(self[i, j].has(expr) for i, j in self.mat.keys())
@@ -877,18 +875,40 @@ class DOKMatrix(object):
 
     def scalar_multiply(self, scalar):
         mat = DOKMatrix(self.rows, self.cols, {})
-        for i in self.mat:
-            mat[i] = scalar * self[i]
+        for key, value in self.mat.iteritems():
+            mat[key] = scalar * value
         return mat
 
     def to_dokmatrix(self):
         return self
 
     def to_lilmatrix(self):
+        from sympy.matrices.lilmatrix import LILMatrix
         return LILMatrix._from_dict(self.rows, self.cols, self.mat)
 
-    def to_dense(self):
+    def to_densematrix(self):
         return Matrix(self.rows, self.cols, lambda i, j: self[i, j])
+
+    def copy(self):
+        return DOKMatrix(self.rows, self.cols, self.mat)
+
+    def inverse_solver(self, solver=None):
+        from matrixutils import vecs2matrix
+        if not solver or solver == 'CH':
+            solver = self._cholesky_solve
+        elif solver == 'LDL':
+            solver = self.LDL_solve
+        else:
+            raise Exception('solver method not recognized')
+        I = Matrix.eye(self.rows)
+        return vecs2matrix([solver(I[:, i])
+            for i in xrange(self.cols)], repr='dok')
+
+    def inverse_CH(self):
+        return self.inverse_solver(solver = 'CH')
+
+    def inverse_LDL(self):
+        return self.inverse_solver(solver = 'LDL')
 
     def _lil_row_lower(A):
         return A._lil_lower(0)
