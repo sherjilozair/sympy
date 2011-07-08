@@ -27,7 +27,7 @@ from ntheory import *
 from concrete import *
 from simplify import *
 from solvers import *
-from matrices import *
+from linalg import *
 from geometry import *
 from utilities import *
 from integrals import *
